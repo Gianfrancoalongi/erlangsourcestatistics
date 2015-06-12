@@ -24,7 +24,7 @@ repeats_on_same_line([N|R],undefined,0,[]) ->
 repeats_on_same_line([N|R],N,Seen,Acc) ->
     repeats_on_same_line(R,N,Seen+1,Acc);
 repeats_on_same_line([N|R],L,Seen,Acc) ->
-    repeats_on_same_line(R,N,1,[{N,Seen}|Acc]).
+    repeats_on_same_line(R,N,1,[{L,Seen}|Acc]).
 
 get_linenumbers({function,_Line,call,_,Clauses}) ->    
     [ get_linenumbers(C) || C <- Clauses ];
