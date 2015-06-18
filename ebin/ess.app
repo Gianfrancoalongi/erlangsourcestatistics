@@ -5,4 +5,6 @@
               {applications,[kernel,stdlib]},
               {mod,{ess_app,[]}},
               {env,[]},
-              {modules,[ess]}]}.
+              {modules,[ess,expressions_per_function,expressions_per_line,
+                        function_clauses_per_function,functions_in_a_module,
+                        number_of_expressions_in_module]}]}.
