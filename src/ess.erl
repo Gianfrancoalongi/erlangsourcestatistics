@@ -21,19 +21,22 @@ number_of_expressions_per_line(AST) ->
 
 number_of_expressions_per_function(AST) ->
     Fs = [ X || X <- AST, element(1,X) == function],
-    [ {element(3,F), element(4,F), 
+    [ {function_identity(F),
        begin
            LNs = get_linenumbers(F),
            length(lists:usort(lists:flatten(LNs)))
        end}
       || F <- Fs ].
 
+function_identity(F) ->
+    {element(3,F),element(4,F)}.
+
 number_of_functions_per_module(AST) ->
     length([ X || X <- AST, element(1,X) == function]).
     
 number_of_function_clauses_per_function(AST) ->
     Fs = [ X || X <- AST, element(1,X) == function],
-    [ {element(3,F), element(4,F), length(element(5,F))}
+    [ {function_identity(F), length(element(5,F))}
       || F <- Fs].
 
 hide_anything_under_2(Repeats_per_line) ->
