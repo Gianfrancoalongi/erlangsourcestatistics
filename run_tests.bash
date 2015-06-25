@@ -8,7 +8,6 @@ main()
     test_ expressions_per_function
     test_ functions_in_a_module
     test_ function_clauses_per_function    
-    test_ number_of_expressions_in_module
 }
 
 clean_up() 
@@ -53,13 +52,6 @@ function_clauses_per_function ()
     erlc -o ebin/ -pa ebin/ test/function_clauses_per_function.erl  > /tmp/res
     grep -qF 'number_of_function_clauses_per_function [{{a,3},6},{{b,2},4},{{c,1},2}]' /tmp/res
     [[ $? == 0 ]] && echo 'PASSED' || echo 'FAILED'    
-}
-
-number_of_expressions_in_module ()
-{
-    erlc -o ebin/ -pa ebin/ test/number_of_expressions_in_module.erl  > /tmp/res
-    grep -qF 'number_of_expressions_in_module 17' /tmp/res
-    [[ $? == 0 ]] && echo 'PASSED' || echo 'FAILED'
 }
 
 main
