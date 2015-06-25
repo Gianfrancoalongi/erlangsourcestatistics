@@ -6,12 +6,10 @@ parse_transform(AST,Options) ->
     R2= number_of_expressions_per_function(AST),
     R3= number_of_functions_per_module(AST),
     R4= number_of_function_clauses_per_function(AST),
-    R5= number_of_expressions_in_module(AST),
     report([{number_of_expressions_per_line,R},
             {number_of_expressions_per_function,R2},
             {number_of_functions_per_module,R3},
-            {number_of_function_clauses_per_function,R4},
-            {number_of_expressions_in_module, R5}
+            {number_of_function_clauses_per_function,R4}
            ],Options),
     AST.
 
@@ -41,10 +39,6 @@ number_of_function_clauses_per_function(AST) ->
     Fs = [ X || X <- AST, element(1,X) == function],
     [ {function_identity(F), length(element(5,F))}
       || F <- Fs].
-
-number_of_expressions_in_module(AST) ->
-    Fs = [ X || X <- AST, element(1,X) == function],
-    lists:sum([ length(lists:flatten(get_linenumbers(F))) || F <- Fs ]).
 
 hide_anything_under_2(Repeats_per_line) ->
     [ X || X <- Repeats_per_line, element(2,X) > 1 ].

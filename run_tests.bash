@@ -7,7 +7,7 @@ main()
     test_ expressions_per_line_numbers
     test_ expressions_per_function
     test_ functions_in_a_module
-    test_ function_clauses_per_function    
+    test_ function_clauses_per_function
 }
 
 clean_up() 
