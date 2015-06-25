@@ -4,7 +4,7 @@ SQR machinery
    / Number of expressions in Functions
    / Number of Functions in a Module
    / Number of function clauses for a function
-   - Number of record definitions in module
+   / Number of record definitions in module
    - Number of includes in module
    - Number of defines in module
    - Number of Assignments
