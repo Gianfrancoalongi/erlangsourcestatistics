@@ -7,11 +7,13 @@ parse_transform(AST,Options) ->
     R3= number_of_functions_per_module(AST),
     R4= number_of_function_clauses_per_function(AST),
     R5= number_of_record_definitions_per_module(AST),
+    R6= number_of_includes_per_module(AST),
     report([{number_of_expressions_per_line,R},
             {number_of_expressions_per_function,R2},
             {number_of_functions_per_module,R3},
             {number_of_function_clauses_per_function,R4},
-            {number_of_record_definitions_per_module,R5}
+            {number_of_record_definitions_per_module,R5},
+            {number_of_includes_per_module,R6}
            ],Options),
     AST.
 
@@ -44,6 +46,12 @@ number_of_function_clauses_per_function(AST) ->
 
 number_of_record_definitions_per_module(AST) ->
     length([ 1 || {attribute,_,record,_} <- AST ]).
+
+number_of_includes_per_module(AST) ->
+    Files = [ F || {attribute,_,file,_}=F <- AST],
+    [{attribute,_,file,{FileName,_}}|R] = Files,
+    Others = [ F || F <- R, element(1,element(4,F)) =/= FileName ],                     
+    length(Others).
 
 hide_anything_under_2(Repeats_per_line) ->
     [ X || X <- Repeats_per_line, element(2,X) > 1 ].
