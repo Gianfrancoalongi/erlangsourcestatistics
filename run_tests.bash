@@ -10,6 +10,7 @@ main()
     test_ function_clauses_per_function
     test_ record_definitions_per_module
     test_ includes_per_module
+    test_ defines_in_module
 }
 
 clean_up() 
@@ -68,6 +69,13 @@ includes_per_module ()
     erlc -o ebin/ -pa ebin/ test/includes_per_module.erl > /tmp/res
     grep -qF 'number_of_includes_per_module 2' /tmp/res
     [[ $? == 0 ]] && echo 'PASSED' || echo 'FAILED'    
+}
+
+defines_in_module ()
+{
+    erlc -o ebin/ -pa ebin/ test/defines_per_module.erl > /tmp/res
+    grep -qF 'number_of_defines_in_module 2' /tmp/res
+    [[ $? == 0 ]] && echo 'PASSED' || echo 'FAILED'
 }
 
 main

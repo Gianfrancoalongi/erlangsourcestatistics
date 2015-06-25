@@ -6,7 +6,7 @@ SQR machinery
    / Number of function clauses for a function
    / Number of record definitions in module
    / Number of includes in module
-   - Number of defines in module
+   = Number of defines in module <-- cannot be done with parse transform
    - Number of Assignments
    - Number of Old -> New1, New2, New3, New4 ....
    - Guard size/complexity (expression size)
