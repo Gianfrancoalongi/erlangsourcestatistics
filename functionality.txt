@@ -7,8 +7,9 @@ SQR machinery
    / Number of record definitions in module
    / Number of includes in module
    = Number of defines in module <-- cannot be done with parse transform
-   - Number of Assignments
+   - Assignment X -> X1 -> X2 -> X3
    - Number of Old -> New1, New2, New3, New4 ....
+   - Number of Assignments
    - Guard size/complexity (expression size)
    - Argument list length
    - Number of expressions in Case/If branches

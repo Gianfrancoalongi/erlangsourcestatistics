@@ -11,6 +11,7 @@ main()
     test_ record_definitions_per_module
     test_ includes_per_module
     test_ defines_in_module
+    test_ number_of_variable_steppings_new1_new2_etc
 }
 
 clean_up() 
@@ -74,6 +75,13 @@ includes_per_module ()
 defines_in_module ()
 {
     echo 'NOT APPLICABLE'
+}
+
+number_of_variable_steppings_new1_new2_etc ()
+{
+    erlc -o ebin/ -pa ebin/ test/variable_stepping.erl > /tmp/res
+    grep -qF 'variable_stepping ' /tmp/res
+    [[ $? == 0 ]] && echo 'PASSED' || echo 'FAILED'
 }
 
 main

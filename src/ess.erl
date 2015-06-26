@@ -8,12 +8,14 @@ parse_transform(AST,Options) ->
     R4= number_of_function_clauses_per_function(AST),
     R5= number_of_record_definitions_per_module(AST),
     R6= number_of_includes_per_module(AST),
+    R7= variable_steppings(AST),
     report([{number_of_expressions_per_line,R},
             {number_of_expressions_per_function,R2},
             {number_of_functions_per_module,R3},
             {number_of_function_clauses_per_function,R4},
             {number_of_record_definitions_per_module,R5},
-            {number_of_includes_per_module,R6}
+            {number_of_includes_per_module,R6},
+            {variable_steppings, R7}
            ],Options),
     AST.
 
@@ -52,6 +54,35 @@ number_of_includes_per_module(AST) ->
     [{attribute,_,file,{FileName,_}}|R] = Files,
     Others = [ F || F <- R, element(1,element(4,F)) =/= FileName ],                     
     length(Others).
+
+variable_steppings(AST) ->
+    ClausesSet = [ Clauses || {function,_,_,_,Clauses} <- AST ],
+    [ variable_steppings_in_body(ClausesList) || ClausesList <- ClausesSet ].
+
+variable_steppings_in_body([]) ->
+    [];
+variable_steppings_in_body([{clause,_,Arguments,_,Body}|T]) ->
+    Arg_Variables = extract_variables(Arguments),
+    Body_Variables = extract_variables(Body),
+    R = steppings(Arg_Variables++Body_Variables),
+    R ++ variable_steppings_in_body(T).
+
+extract_variables([]) ->
+    [];
+extract_variables([{var,_,V}=V|R]) ->
+    [atom_to_list(V) | extract_variables(R)];
+extract_variables([E|R]) when is_tuple(E) ->
+    extract_variables(tuple_to_list(E))++
+        extract_variables(R);
+extract_variables([E|R]) when is_list(E) ->
+    extract_variables(E)++
+        extract_variables(R);
+extract_variables([_|R]) ->
+    extract_variables(R).
+
+
+steppings(Variables) ->
+    Variables.
 
 hide_anything_under_2(Repeats_per_line) ->
     [ X || X <- Repeats_per_line, element(2,X) > 1 ].
