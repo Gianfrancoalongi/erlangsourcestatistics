@@ -73,9 +73,7 @@ includes_per_module ()
 
 defines_in_module ()
 {
-    erlc -o ebin/ -pa ebin/ test/defines_per_module.erl > /tmp/res
-    grep -qF 'number_of_defines_in_module 2' /tmp/res
-    [[ $? == 0 ]] && echo 'PASSED' || echo 'FAILED'
+    echo 'NOT APPLICABLE'
 }
 
 main
