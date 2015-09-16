@@ -11,7 +11,8 @@ main()
     test_ record_definitions_per_module
     test_ includes_per_module
     test_ defines_in_module
-    test_ number_of_variable_steppings_new1_new2_etc
+#    test_ number_of_variable_steppings_new1_new2_etc
+    test_ structural_depth
 }
 
 clean_up() 
@@ -81,6 +82,13 @@ number_of_variable_steppings_new1_new2_etc ()
 {
     erlc -o ebin/ -pa ebin/ test/variable_stepping.erl > /tmp/res
     grep -qF 'variable_stepping ' /tmp/res
+    [[ $? == 0 ]] && echo 'PASSED' || echo 'FAILED'
+}
+
+structural_depth ()
+{
+    erlc -o ebin/ -pa ebin/ test/structural_depth.erl > /tmp/res
+    grep -qF 'structural_depth ' /tmp/res
     [[ $? == 0 ]] && echo 'PASSED' || echo 'FAILED'
 }
 

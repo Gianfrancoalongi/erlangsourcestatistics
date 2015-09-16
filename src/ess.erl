@@ -9,13 +9,15 @@ parse_transform(AST,Options) ->
     R5= number_of_record_definitions_per_module(AST),
     R6= number_of_includes_per_module(AST),
     R7= variable_steppings(AST),
+    R8= structural_depth(AST),
     report([{number_of_expressions_per_line,R},
             {number_of_expressions_per_function,R2},
             {number_of_functions_per_module,R3},
             {number_of_function_clauses_per_function,R4},
             {number_of_record_definitions_per_module,R5},
             {number_of_includes_per_module,R6},
-            {variable_steppings, R7}
+            {variable_steppings, R7},
+            {structural_depth, R8}
            ],Options),
     AST.
 
@@ -36,6 +38,8 @@ number_of_expressions_per_function(AST) ->
 
 function_identity(F) ->
     {element(3,F),element(4,F)}.
+function_clauses(F) ->
+    element(5, F).
 
 number_of_functions_per_module(AST) ->
     io:format("AST:~p~n",[AST]),
@@ -83,6 +87,47 @@ extract_variables([_|R]) ->
 
 steppings(Variables) ->
     Variables.
+
+structural_depth(AST) ->
+    Functions = [F || F <- AST, is_ast_function(F) ],
+    [ {function_identity(F), gen_structural_depth(function_clauses(F))} || 
+	F <- Functions ].
+
+gen_structural_depth(L) when is_list(L) ->
+    lists:sum([ gen_structural_depth(X) || X <- L ]);
+gen_structural_depth({clause, _, Match, Guards, Exprs}) ->
+    2*gen_structural_depth(Match) 
+	+ gen_structural_depth(Guards) 
+	+ gen_structural_depth(Exprs);
+gen_structural_depth({match,_,RHS,LHS}) ->
+    2*gen_structural_depth(RHS) + gen_structural_depth(LHS);
+gen_structural_depth({call,_, _, Args}) ->
+    1+gen_structural_depth(Args);
+gen_structural_depth({'case',_, Expr, Clauses}) ->
+    gen_structural_depth(Expr) + gen_structural_depth(Clauses);
+gen_structural_depth({cons,_,Hd, Tl}) ->
+    gen_structural_depth(Hd) + gen_structural_depth(Tl);
+gen_structural_depth({tuple,_,Elements}) ->
+    1+gen_structural_depth(Elements);
+gen_structural_depth({op,_,_,LHS,RHS}) ->
+    gen_structural_depth(LHS) + gen_structural_depth(RHS);
+gen_structural_depth({op,_,_,Expr}) ->
+    gen_structural_depth(Expr);
+
+gen_structural_depth({atom,_,_}) -> 0;
+gen_structural_depth({var,_,_}) -> 0;
+gen_structural_depth({integer,_,_}) -> 0;
+
+gen_structural_depth(What) ->
+    io:format("**** unknown AST: ~p~n", [What]),
+    0.
+
+
+is_ast_function(F) when element(1, F) == function ->
+    true;
+is_ast_function(_) ->
+    false.
+
 
 hide_anything_under_2(Repeats_per_line) ->
     [ X || X <- Repeats_per_line, element(2,X) > 1 ].
