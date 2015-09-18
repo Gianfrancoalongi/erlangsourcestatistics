@@ -54,10 +54,17 @@ function_identity(F) ->
 function_clauses(F) ->
     element(5, F).
 
+
+
+
 number_of_functions_per_module(AST) ->
     io:format("AST:~p~n",[AST]),
     length([ X || X <- AST, element(1,X) == function]).
     
+
+clauses_per_function(AST) ->
+    length(function_clauses(AST)).
+
 number_of_function_clauses_per_function(AST) ->
     Fs = [ X || X <- AST, element(1,X) == function],
     [ {function_identity(F), length(element(5,F))}
