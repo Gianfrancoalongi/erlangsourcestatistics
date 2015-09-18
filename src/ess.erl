@@ -122,27 +122,34 @@ structural_depth({clause, _, Match, Guards, Exprs}) ->
 	+ structural_depth(Guards) 
 	+ structural_depth(Exprs);
 structural_depth({match,_,RHS,LHS}) ->
-    structural_depth(RHS) + structural_depth(LHS);
+    1+structural_depth(RHS) + structural_depth(LHS);
 structural_depth({call,_, _, Args}) ->
     1+structural_depth(Args);
+structural_depth({bin,_, Elems}) ->
+    1+structural_depth(Elems);
+structural_depth({bin_element,_, Elem, _, _}) ->
+    structural_depth(Elem);
 structural_depth({'case',_, Expr, Clauses}) ->
     structural_depth(Expr) + structural_depth(Clauses);
 structural_depth({cons,_,Hd, Tl}) ->
     structural_depth(Hd) + structural_depth(Tl);
+structural_depth({record,_,_,Fields}) ->
+    1+structural_depth(Fields);
 structural_depth({tuple,_,Elements}) ->
     1+structural_depth(Elements);
 structural_depth({op,_,_,LHS,RHS}) ->
     1+structural_depth(LHS) + structural_depth(RHS);
 structural_depth({op,_,_,Expr}) ->
-    structural_depth(Expr);
+    1+structural_depth(Expr);
 
 structural_depth({atom,_,_}) -> 0;
 structural_depth({var,_,_}) -> 0;
-structural_depth({integer,_,_}) -> 0;
+structural_depth({string,_,_}) -> 0;
+structural_depth({integer,_,_}) -> 0.
 
-structural_depth(What) ->
-    io:format("**** unknown AST: ~p~n", [What]),
-    0.
+%% structural_depth(What) ->
+%%     io:format("**** unknown AST: ~p~n", [What]),
+%%     0.
 
 
 is_ast_function(F) when element(1, F) == function ->
