@@ -1,18 +1,17 @@
 -module(ess).
 -compile(export_all).
-%%-export([parse_transform/2]).
 
 file(F) ->
     file(F, []).
 file(F, Opts) ->
-    analyse(parse_ast(F), Opts).
+    {ok,Mod,Bin} = compile:file(F,[binary,debug_info]),
+    {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
+        beam_lib:chunks(Bin,[abstract_code]),
+    analyse(AST,Opts).
 
-parse_ast(F) ->
-    {ok, Bin} = file:read_file(F),
-    {ok, Tokens, _} = erl_scan:string(binary_to_list(Bin)),
-    erl_parse:parse_form(Tokens).
+analyse(AST, Opts) -> 
+    io:format("Analysing:~p~n",[AST]).
 
-analyse(_,_) -> [].
 %% analyse(AST,Options) ->    
 %%     R = number_of_expressions_per_line(AST),
 %%     R2= number_of_expressions_per_function(AST),
