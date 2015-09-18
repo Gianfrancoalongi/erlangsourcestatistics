@@ -132,7 +132,7 @@ structural_depth({cons,_,Hd, Tl}) ->
 structural_depth({tuple,_,Elements}) ->
     1+structural_depth(Elements);
 structural_depth({op,_,_,LHS,RHS}) ->
-    structural_depth(LHS) + structural_depth(RHS);
+    1+structural_depth(LHS) + structural_depth(RHS);
 structural_depth({op,_,_,Expr}) ->
     structural_depth(Expr);
 
