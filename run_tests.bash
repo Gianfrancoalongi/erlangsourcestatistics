@@ -3,16 +3,8 @@
 main()
 {
     clean_up
-    compile_parse_transform
-    test_ expressions_per_line_numbers
-    test_ expressions_per_function
-    test_ functions_in_a_module
-    test_ function_clauses_per_function
-    test_ record_definitions_per_module
-    test_ includes_per_module
-    test_ defines_in_module
-#    test_ number_of_variable_steppings_new1_new2_etc
-    test_ structural_depth
+    compile
+    test
 }
 
 clean_up() 
@@ -20,15 +12,14 @@ clean_up()
     rebar clean 
 }
 
-compile_parse_transform() 
+compile() 
 { 
     rebar compile 
 }
 
-test_ ()
+test()
 {
-    echo -n $@ ' = '
-    eval $@
+    rebar eunit
 }
 
 expressions_per_line_numbers ()

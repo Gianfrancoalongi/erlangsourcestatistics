@@ -1,16 +1,15 @@
 
 -module(ess_structural_tests).
 
+-include_lib("eunit/include/eunit.hrl").
 
 -compile(export_all).
 
 
 base_test() ->
-    [{"int",
-      fun() ->
-	      Res = structural_depth("f() -> 3."),
-	      ?assertEqual(0, Res)
-      end}].
+    Res = structural_depth("f() -> 3."),
+    ?assertEqual(0, Res).
+
 
 construct_test() ->
     [{"int",
@@ -27,13 +26,6 @@ match_complex_test() ->
       end}].
 
 
-
-
 structural_depth(Str) ->
-    %% make into aproper erlang module
-    Str2 = "-module(xx)\n-export([f/0]).\n"++Str++"\n",
-    ess:structural_depth(make_str_into_ast(Str2)).
+    ess_test_lib:call_ess(structural_depth, Str).
 
-
-make_str_into_ast(Str) ->
-    ok.
