@@ -1,25 +1,36 @@
 -module(ess).
--export([parse_transform/2]).
+-compile(export_all).
 
-parse_transform(AST,Options) ->    
-    R = number_of_expressions_per_line(AST),
-    R2= number_of_expressions_per_function(AST),
-    R3= number_of_functions_per_module(AST),
-    R4= number_of_function_clauses_per_function(AST),
-    R5= number_of_record_definitions_per_module(AST),
-    R6= number_of_includes_per_module(AST),
-    R7= variable_steppings(AST),
-    R8= structural_depth(AST),
-    report([{number_of_expressions_per_line,R},
-            {number_of_expressions_per_function,R2},
-            {number_of_functions_per_module,R3},
-            {number_of_function_clauses_per_function,R4},
-            {number_of_record_definitions_per_module,R5},
-            {number_of_includes_per_module,R6},
-            {variable_steppings, R7},
-            {structural_depth, R8}
-           ],Options),
-    AST.
+file(F) ->
+    file(F, []).
+file(F, Opts) ->
+    {ok,Mod,Bin} = compile:file(F,[binary,debug_info]),
+    {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
+        beam_lib:chunks(Bin,[abstract_code]),
+    analyse(AST,Opts).
+
+analyse(AST, Opts) -> 
+    io:format("Analysing:~p~n",[AST]).
+
+%% analyse(AST,Options) ->    
+%%     R = number_of_expressions_per_line(AST),
+%%     R2= number_of_expressions_per_function(AST),
+%%     R3= number_of_functions_per_module(AST),
+%%     R4= number_of_function_clauses_per_function(AST),
+%%     R5= number_of_record_definitions_per_module(AST),
+%%     R6= number_of_includes_per_module(AST),
+%%     R7= variable_steppings(AST),
+%%     R8= structural_depth(AST),
+%%     report([{number_of_expressions_per_line,R},
+%%             {number_of_expressions_per_function,R2},
+%%             {number_of_functions_per_module,R3},
+%%             {number_of_function_clauses_per_function,R4},
+%%             {number_of_record_definitions_per_module,R5},
+%%             {number_of_includes_per_module,R6},
+%%             {variable_steppings, R7},
+%%             {structural_depth, R8}
+%%            ],Options),
+%%     AST.
 
 number_of_expressions_per_line(AST) ->
     Fs = [ X || X <- AST, element(1,X) == function],
@@ -27,24 +38,32 @@ number_of_expressions_per_line(AST) ->
     ROSL = repeats_on_same_line(LNs,undefined,0,[]),
     hide_anything_under_2(ROSL).
 
-number_of_expressions_per_function(AST) ->
-    Fs = [ X || X <- AST, element(1,X) == function],
-    [ {function_identity(F),
-       begin
-           LNs = get_linenumbers(F),
-           length(lists:usort(lists:flatten(LNs)))
-       end}
-      || F <- Fs ].
+max_number_of_expressions_per_function_line(AST) ->
+    LNs = get_linenumbers(AST),
+    ROSL = repeats_on_same_line(lists:flatten(LNs)),
+    lists:max(ROSL).
+
+number_of_expressions_for_function(AST) ->
+    LNs = get_linenumbers(AST),
+    length(lists:usort(lists:flatten(LNs))).
+
 
 function_identity(F) ->
     {element(3,F),element(4,F)}.
 function_clauses(F) ->
     element(5, F).
 
+
+
+
 number_of_functions_per_module(AST) ->
     io:format("AST:~p~n",[AST]),
     length([ X || X <- AST, element(1,X) == function]).
     
+
+clauses_per_function(AST) ->
+    length(function_clauses(AST)).
+
 number_of_function_clauses_per_function(AST) ->
     Fs = [ X || X <- AST, element(1,X) == function],
     [ {function_identity(F), length(element(5,F))}
@@ -88,39 +107,55 @@ extract_variables([_|R]) ->
 steppings(Variables) ->
     Variables.
 
-structural_depth(AST) ->
-    Functions = [F || F <- AST, is_ast_function(F) ],
-    [ {function_identity(F), gen_structural_depth(function_clauses(F))} || 
-	F <- Functions ].
+%% structural_depth(AST) ->
+%%     Functions = [F || F <- AST, is_ast_function(F) ],
+%%     [ {function_identity(F), gen_structural_depth(function_clauses(F))} || 
+%% 	F <- Functions ].
 
-gen_structural_depth(L) when is_list(L) ->
-    lists:sum([ gen_structural_depth(X) || X <- L ]);
-gen_structural_depth({clause, _, Match, Guards, Exprs}) ->
-    2*gen_structural_depth(Match) 
-	+ gen_structural_depth(Guards) 
-	+ gen_structural_depth(Exprs);
-gen_structural_depth({match,_,RHS,LHS}) ->
-    2*gen_structural_depth(RHS) + gen_structural_depth(LHS);
-gen_structural_depth({call,_, _, Args}) ->
-    1+gen_structural_depth(Args);
-gen_structural_depth({'case',_, Expr, Clauses}) ->
-    gen_structural_depth(Expr) + gen_structural_depth(Clauses);
-gen_structural_depth({cons,_,Hd, Tl}) ->
-    gen_structural_depth(Hd) + gen_structural_depth(Tl);
-gen_structural_depth({tuple,_,Elements}) ->
-    1+gen_structural_depth(Elements);
-gen_structural_depth({op,_,_,LHS,RHS}) ->
-    gen_structural_depth(LHS) + gen_structural_depth(RHS);
-gen_structural_depth({op,_,_,Expr}) ->
-    gen_structural_depth(Expr);
+structural_depth(L) when is_list(L) ->
+    lists:sum([ structural_depth(X) || X <- L ]);
+structural_depth({function, _, _, _, Clauses}) ->
+    structural_depth(Clauses);
+structural_depth({clause, _, Match, Guards, Exprs}) ->
+    structural_depth(Match) 
+	+ structural_depth(Guards) 
+	+ structural_depth(Exprs);
+structural_depth({match,_,RHS,LHS}) ->
+    1+structural_depth(RHS) + structural_depth(LHS);
+structural_depth({call,_, _, Args}) ->
+    1+structural_depth(Args);
+structural_depth({bin,_, Elems}) ->
+    1+structural_depth(Elems);
+structural_depth({bin_element,_, Elem, _, _}) ->
+    structural_depth(Elem);
+structural_depth({'case',_, Expr, Clauses}) ->
+    structural_depth(Expr) + structural_depth(Clauses);
+structural_depth({cons,_,Hd, Tl}) ->
+    structural_depth(Hd) + structural_depth(Tl);
+structural_depth({record,_,_,Fields}) ->
+    1+structural_depth(Fields);
+structural_depth({record_field,_,_,Expr}) ->
+    1+structural_depth(Expr);
+structural_depth({tuple,_,Elements}) ->
+    1+structural_depth(Elements);
+structural_depth({op,_,_,LHS,RHS}) ->
+    1+structural_depth(LHS) + structural_depth(RHS);
+structural_depth({op,_,_,Expr}) ->
+    1+structural_depth(Expr);
+structural_depth({lc,_,Body,Generator}) ->
+    1+structural_depth(Body)+structural_depth(Generator);
+structural_depth({generate,_,Expr,Guards}) ->
+    structural_depth(Expr) + structural_depth(Guards);
 
-gen_structural_depth({atom,_,_}) -> 0;
-gen_structural_depth({var,_,_}) -> 0;
-gen_structural_depth({integer,_,_}) -> 0;
+structural_depth({nil,_}) -> 0;
+structural_depth({atom,_,_}) -> 0;
+structural_depth({var,_,_}) -> 0;
+structural_depth({string,_,_}) -> 0;
+structural_depth({integer,_,_}) -> 0.
 
-gen_structural_depth(What) ->
-    io:format("**** unknown AST: ~p~n", [What]),
-    0.
+%% structural_depth(What) ->
+%%     io:format("**** unknown AST: ~p~n", [What]),
+%%     0.
 
 
 is_ast_function(F) when element(1, F) == function ->
@@ -131,6 +166,19 @@ is_ast_function(_) ->
 
 hide_anything_under_2(Repeats_per_line) ->
     [ X || X <- Repeats_per_line, element(2,X) > 1 ].
+
+repeats_on_same_line([]) ->
+    [];
+repeats_on_same_line(LNs) ->
+    repeats_on_same_line(LNs,hd(LNs),0).
+
+repeats_on_same_line([N|R],N,Counted) ->
+    repeats_on_same_line(R,N,Counted+1);
+repeats_on_same_line([N|R],Prior,Counted) ->
+    [ Counted | repeats_on_same_line(R,N,1) ];
+repeats_on_same_line([],Prior,Counted) ->
+    [ Counted ].
+
 
 repeats_on_same_line([],_,1,Acc) ->
     lists:reverse(Acc);
