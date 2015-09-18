@@ -135,13 +135,20 @@ structural_depth({cons,_,Hd, Tl}) ->
     structural_depth(Hd) + structural_depth(Tl);
 structural_depth({record,_,_,Fields}) ->
     1+structural_depth(Fields);
+structural_depth({record_field,_,_,Expr}) ->
+    1+structural_depth(Expr);
 structural_depth({tuple,_,Elements}) ->
     1+structural_depth(Elements);
 structural_depth({op,_,_,LHS,RHS}) ->
     1+structural_depth(LHS) + structural_depth(RHS);
 structural_depth({op,_,_,Expr}) ->
     1+structural_depth(Expr);
+structural_depth({lc,_,Body,Generator}) ->
+    1+structural_depth(Body)+structural_depth(Generator);
+structural_depth({generate,_,Expr,Guards}) ->
+    structural_depth(Expr) + structural_depth(Guards);
 
+structural_depth({nil,_}) -> 0;
 structural_depth({atom,_,_}) -> 0;
 structural_depth({var,_,_}) -> 0;
 structural_depth({string,_,_}) -> 0;
