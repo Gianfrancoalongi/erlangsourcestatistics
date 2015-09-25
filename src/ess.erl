@@ -14,11 +14,14 @@ analyse(AST, Opts) ->
 
 analyze_function(AST) ->
     sort([{depth, structural_depth(AST)},
-          {expressions_per_function, number_of_expressions_for_function(AST)}]).
+          {expressions_per_function, number_of_expressions_for_function(AST)},
+          {clauses, clauses_per_function(AST)},
+          {arity, function_arity(AST)},
+          {expressions_per_line, expressions_per_function_line(AST)}
+         ]).
 
 sort(L) -> lists:sort(L).
     
-
 %% analyse(AST,Options) ->    
 %%     R = number_of_expressionser_line(AST),
 %%     R2= number_of_expressions_per_function(AST),
@@ -39,16 +42,20 @@ sort(L) -> lists:sort(L).
 %%            ],Options),
 %%     AST.
 
+
 number_of_expressions_per_line(AST) ->
     Fs = [ X || X <- AST, element(1,X) == function],
     LNs = lists:flatten([ get_linenumbers(F) || F <- Fs ]),
     ROSL = repeats_on_same_line(LNs,undefined,0,[]),
     hide_anything_under_2(ROSL).
 
-max_number_of_expressions_per_function_line(AST) ->
+expressions_per_function_line(AST) ->
     LNs = get_linenumbers(AST),
     ROSL = repeats_on_same_line(lists:flatten(LNs)),
-    lists:max(ROSL).
+    {lists:max(ROSL), lists:min(ROSL), avg_sum(ROSL)}.
+
+avg_sum(L) ->
+    round(lists:sum(L) / length(L)).
 
 number_of_expressions_for_function(AST) ->
     LNs = get_linenumbers(AST),
@@ -60,8 +67,8 @@ function_identity(F) ->
 function_clauses(F) ->
     element(5, F).
 
-
-
+function_arity(AST) ->
+    element(4, AST).
 
 number_of_functions_per_module(AST) ->
     io:format("AST:~p~n",[AST]),

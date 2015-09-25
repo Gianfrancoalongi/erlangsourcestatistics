@@ -17,18 +17,18 @@ large() ->
     Res = ess:number_of_expressions_for_function(AST),
     ?assertEqual(17, Res).
 
-max_expressions_per_line_numbers_test_() ->
+expressions_per_line_numbers_test_() ->
     [ {"simple",
        fun() ->
                AST = str2ast("f() -> 25."),
-               Res = ess:max_number_of_expressions_per_function_line(AST),
-               ?assertEqual(1, Res)
+               Res = ess:expressions_per_function_line(AST),
+               ?assertEqual({1,1,1}, Res)
        end},
       {"2",
       fun() ->
                AST = str2ast("f() -> 25, 24,\n21."),
-               Res = ess:max_number_of_expressions_per_function_line(AST),
-               ?assertEqual(2, Res)              
+               Res = ess:expressions_per_function_line(AST),
+               ?assertEqual({2,1,2}, Res)              
        end}].
 
 
@@ -69,10 +69,10 @@ structural_depth_test_cases() ->
 analyze_function_test() ->
     AST = str2ast("f() -> 1."),
     Res = ess:analyze_function(AST),
-    Expected = lists:sort([%%{arity, 0},
-                           %%{clauses, 1},
+    Expected = lists:sort([{arity, 0},
+                           {clauses, 1},
                            {depth, 0},
-                           %%{expressions_per_line, {1,1,1}},
+                           {expressions_per_line, {1,1,1}},
                            {expressions_per_function, 1}
                           ]),
     ?assertEqual(Expected, Res).
