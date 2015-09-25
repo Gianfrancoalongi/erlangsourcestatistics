@@ -17,10 +17,13 @@ analyze_function(AST) ->
           {expressions_per_function, number_of_expressions_for_function(AST)},
           {clauses, clauses_per_function(AST)},
           {arity, function_arity(AST)},
-          {expressions_per_line, expressions_per_function_line(AST)}
+          {expressions_per_line, expressions_per_function_line(AST)},
+          {variable_steppings, variable_steppings_per_function(AST)}
          ]).
 
 sort(L) -> lists:sort(L).
+
+usort(L) -> lists:usort(L).
     
 expressions_per_function_line(AST) ->
     LNs = get_linenumbers(AST),
@@ -43,21 +46,18 @@ function_arity(AST) ->
 clauses_per_function(AST) ->
     length(function_clauses(AST)).
 
-variable_steppings(AST) ->
-    ClausesSet = [ Clauses || {function,_,_,_,Clauses} <- AST ],
-    [ variable_steppings_in_body(ClausesList) || ClausesList <- ClausesSet ].
+variable_steppings_per_function({function,_,_,_,Clauses}) ->
+    sum([ variable_steppings_in_body(Clause) || Clause <- Clauses ]).
 
-variable_steppings_in_body([]) ->
-    [];
-variable_steppings_in_body([{clause,_,Arguments,_,Body}|T]) ->
+variable_steppings_in_body({clause,_,Arguments,_,Body}) ->
     Arg_Variables = extract_variables(Arguments),
     Body_Variables = extract_variables(Body),
-    R = steppings(Arg_Variables++Body_Variables),
-    R ++ variable_steppings_in_body(T).
+    Variables = usort(Arg_Variables++Body_Variables),
+    stepping(Variables).
 
-extract_variables([]) ->
-    [];
-extract_variables([{var,_,V}=V|R]) ->
+sum(X) -> lists:sum(X).
+
+extract_variables([{var,_,V}|R]) ->
     [atom_to_list(V) | extract_variables(R)];
 extract_variables([E|R]) when is_tuple(E) ->
     extract_variables(tuple_to_list(E))++
@@ -66,11 +66,62 @@ extract_variables([E|R]) when is_list(E) ->
     extract_variables(E)++
         extract_variables(R);
 extract_variables([_|R]) ->
-    extract_variables(R).
+    extract_variables(R);
+extract_variables(_) ->
+    [].
+
+stepping(Vars) ->
+    trailing_int(Vars) + leading_new(Vars) + leading_old(Vars).
+
+trailing_int([]) ->
+    0;
+trailing_int([_]) ->
+    0;
+trailing_int([V1, V2 | R]) ->
+    case is_variable_stepping(V1, V2) of
+        true ->
+            1 + trailing_int([V2 | R]);
+        _ ->
+            trailing_int([V2 | R])
+    end.
+
+leading_new(Vars) ->
+    leading_string("New", Vars).
+
+leading_old(Vars) ->
+    leading_string("Old", Vars).
 
 
-steppings(Variables) ->
-    Variables.
+leading_string(Str, Vars) ->
+    News = [ V || V <- Vars, is_leading_str(Str, V)],
+    Others = Vars -- News,
+    Found = lists:filter(
+        fun(Other) ->
+            lists:member(Str++Other, News)
+        end,
+        Others),
+    length(Found).
+
+is_leading_str(Str, Name) ->
+    case string:str(Name, Str) of
+        1 -> true;
+        _ -> false
+    end.
+
+is_variable_stepping([X|V1], [X|V2]) ->
+    is_variable_stepping(V1, V2);
+is_variable_stepping([], V2) ->
+    is_all_integers(V2);
+is_variable_stepping(V1, V2) ->
+    is_all_integers(V1) andalso is_all_integers(V2).
+
+is_all_integers(L) ->
+    io:format("is all int: ~p~n", [L]),
+    lists:all(fun is_ascii_integer/1, L).
+
+is_ascii_integer(X) when (X>=$0), (X=<$9) -> true; 
+is_ascii_integer(_) -> false.
+
 
 structural_depth(L) when is_list(L) ->
     lists:sum([ structural_depth(X) || X <- L ]);
@@ -120,8 +171,6 @@ structural_depth({string,_,_}) -> 0;
 structural_depth({integer,_,_}) -> 0.
 
 
-repeats_on_same_line([]) ->
-    [];
 repeats_on_same_line(LNs) ->
     repeats_on_same_line(LNs,hd(LNs),0).
 
@@ -140,22 +189,23 @@ get_linenumbers({clause,_Line,_,_,Expressions}) ->
 
 get_linenumbers_body([]) ->
     [];
+get_linenumbers_body([{Marker,LN,_}|T]) when is_atom(Marker) ->
+    [LN|get_linenumbers_body(T)];
 get_linenumbers_body([{'case',L,_,Clauses}|R]) ->
-    CaseLines = get_linenumbers_body_clause(Clauses),
-    [L|CaseLines]++get_linenumbers_body(R);
-get_linenumbers_body([{_,L,_,_}|R]) ->
-    [L|get_linenumbers_body(R)];
-get_linenumbers_body([{_,L,_}|R]) ->
-    [L|get_linenumbers_body(R)];
+    CaseLines = get_linenumbers_body(Clauses),
+    [L|CaseLines] ++ get_linenumbers_body(R);
+get_linenumbers_body([{'receive',L,_,Clauses}|R]) ->
+    CaseLines = get_linenumbers_body(Clauses),
+    [L|CaseLines] ++ get_linenumbers_body(R);
+get_linenumbers_body([{'call',L,_, Args}|R]) ->
+    ArgsLines = get_linenumbers_body(Args),
+    [L|ArgsLines] ++ get_linenumbers_body(R);
+get_linenumbers_body([{clause,L,_,_,Expressions}|R]) ->
+    BodyLines = get_linenumbers_body(Expressions),
+    [L|BodyLines] ++ get_linenumbers_body(R);
 get_linenumbers_body([{nil,L}|R]) ->
     [L|get_linenumbers_body(R)];
 get_linenumbers_body([{op,L,_,_,_}|R]) ->
     [L|get_linenumbers_body(R)].
 
-
-get_linenumbers_body_clause([]) ->
-    [];
-get_linenumbers_body_clause([{clause,L,_,_,Expressions}|R]) ->
-    BodyLines = get_linenumbers_body(Expressions),
-    [L|BodyLines] ++ get_linenumbers_body_clause(R).
 
