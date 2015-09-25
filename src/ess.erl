@@ -12,8 +12,15 @@ file(F, Opts) ->
 analyse(AST, Opts) -> 
     io:format("Analysing:~p~n",[AST]).
 
+analyze_function(AST) ->
+    sort([{depth, structural_depth(AST)},
+          {expressions_per_function, number_of_expressions_for_function(AST)}]).
+
+sort(L) -> lists:sort(L).
+    
+
 %% analyse(AST,Options) ->    
-%%     R = number_of_expressions_per_line(AST),
+%%     R = number_of_expressionser_line(AST),
 %%     R2= number_of_expressions_per_function(AST),
 %%     R3= number_of_functions_per_module(AST),
 %%     R4= number_of_function_clauses_per_function(AST),

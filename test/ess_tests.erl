@@ -66,6 +66,16 @@ structural_depth_test_cases() ->
      {"records match ", "f(#s{a=A, d=#e{}}) -> ok.", 4, structural_depth}
     ].
 
+analyze_function_test() ->
+    AST = str2ast("f() -> 1."),
+    Res = ess:analyze_function(AST),
+    Expected = lists:sort([%%{arity, 0},
+                           %%{clauses, 1},
+                           {depth, 0},
+                           %%{expressions_per_line, {1,1,1}},
+                           {expressions_per_function, 1}
+                          ]),
+    ?assertEqual(Expected, Res).
 
 clauses_per_function_test_() ->
     [{"one",
