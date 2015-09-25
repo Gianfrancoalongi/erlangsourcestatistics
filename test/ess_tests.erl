@@ -63,7 +63,13 @@ structural_depth_test_cases() ->
      {"tuple matching", "f() -> { 1, 2 } = g().", 3, structural_depth},
      {"list comprehension", "f() -> [ 1 || _ <- []].", 1, structural_depth},
      {"list comprehension", "f() -> [ A || A <- [], is_list(A)].", 2, structural_depth},
-     {"records match ", "f(#s{a=A, d=#e{}}) -> ok.", 4, structural_depth}
+     {"records match ", "f(#s{a=A, d=#e{}}) -> ok.", 4, structural_depth},
+     {"case clause","f() -> case X of 1 -> 2; 2 -> 1 end.", 1, structural_depth},
+     {"case clause 2","f() -> case X of 1 -> 2+1; 2 -> 1 end.", 2, structural_depth},
+     {"case clause 3","f() -> case g() of 1 -> 2+1; 2 -> 1 end.", 3, structural_depth},
+     {"if clause","f() -> if false -> true; true -> false end.", 1, structural_depth},
+     {"receive","f() -> receive 1 -> 2+1; 2 -> 1 end.", 2, structural_depth},
+     {"receive after","f() -> receive 1 -> 1 after 3 -> 1+2 end.", 2, structural_depth}
     ].
 
 analyze_function_test() ->
