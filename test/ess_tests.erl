@@ -9,12 +9,12 @@ number_of_expressions_per_function_test_() ->
 
 one() ->
     AST = str2ast("b() -> this_one."),
-    Res = ess:number_of_expressions_for_function(AST),
+    Res = ess:lines_per_function(AST),
     ?assertEqual(1, Res).
 
 large() ->
     AST = str2ast(large_func()),
-    Res = ess:number_of_expressions_for_function(AST),
+    Res = ess:lines_per_function(AST),
     ?assertEqual(17, Res).
 
 expressions_per_line_numbers_test_() ->
@@ -31,11 +31,33 @@ expressions_per_line_numbers_test_() ->
                ?assertEqual({2,1,2}, Res)              
        end},
       {"receive",
-      fun() ->
+       fun() ->
                AST = str2ast("f() -> receive hej -> 2+33 end."),
                Res = ess:expressions_per_function_line(AST),
                ?assertEqual({1,1,1}, Res) 
+       end},
+      {"receive with after",
+       fun() ->
+               AST = str2ast("f() -> receive hej -> 2+33 "
+                             "after 120 -> not_ok end."),
+               Res = ess:expressions_per_function_line(AST),
+               ?assertEqual({1,1,1}, Res) 
+       end},
+      {"match",
+       fun() ->
+               AST = str2ast("f() -> A = 1."),
+               Res = ess:expressions_per_function_line(AST),
+               ?assertEqual({1,1,1}, Res) 
        end}].
+
+lines_per_function_test_() ->
+    [ {"receive",
+       fun() ->
+               AST = str2ast("f() -> receive _ -> 3+3, A=g(), 25 end."),
+               Res = ess:lines_per_function(AST),
+               ?assertEqual(1, Res)
+       end}].
+
 
 
 structural_depth_test_() ->
@@ -89,6 +111,68 @@ analyze_function_test() ->
                            {expressions_per_function, 1}
                           ]),
     ?assertEqual(Expected, Res).
+
+analyze_function_with_several_clauses_test() ->
+    AST = str2ast("f(1) -> 1;\n"
+                  "f(2) -> 2."),
+    Res = ess:analyze_function(AST),
+    Expected = lists:sort([{arity, 1},
+                           {clauses, 2},
+                           {depth, 0},
+                           {variable_steppings, 0},
+                           {expressions_per_line, {1,1,1}},
+                           {expressions_per_function, 2}
+                          ]),
+    ?assertEqual(Expected, Res).
+
+analyze_big_function_with_three_clauses_test() ->
+    AST = str2ast("f(OldA,B,C,D) -> \n"
+                  "   A = g(OldA),\n"
+                  "   NewA = f(A,B),\n"
+                  "   case g(NewA) of\n"
+                  "      undefined -> \n"
+                  "           ok;\n"
+                  "      NewA1 -> \n"
+                  "           g(NewA1)\n"
+                  "   end;\n"
+                  "f(_,B,_,_) -> \n"
+                  "   B1 = g(B),\n"
+                  "   B2 = g(B1),\n"
+                  "   g(B2,B1);\n"
+                  "f(_,_,_,_) -> \n"
+                  "   ok.\n"),
+    Res = ess:analyze_function(AST),
+    Expected = lists:sort([{arity, 4},
+                           {clauses, 3},
+                           {depth, 7},
+                           {variable_steppings, 5},
+                           {expressions_per_line, {1,1,1}},
+                           {expressions_per_function, 11}
+                           ]),
+    ?assertEqual(Expected, Res).
+
+analyze_function_with_recieve_after_test() ->
+    AST = str2ast("f(OldA) -> \n"
+                  "   A = g(OldA),\n"
+                  "   receive\n" 
+                  "      A -> \n"
+                  "           ok\n" 
+                  "   after 120 -> \n"
+                  "           g(A)\n"
+                  "   end;\n"
+                  "f(_) -> \n"
+                  "   g().\n"),
+    Res = ess:analyze_function(AST),
+    Expected = lists:sort([{arity, 1},
+                           {clauses, 2},
+                           {depth, 4},
+                           {variable_steppings, 1},
+                           {expressions_per_line, {1,1,1}},
+                           {expressions_per_function, 6}
+                           ]),
+    ?assertEqual(Expected, Res).
+
+
 
 clauses_per_function_test_() ->
     [{"one",
@@ -213,5 +297,6 @@ stepping_test_() ->
               ?assertEqual(3, Res)
       end
      }].
+
 
 

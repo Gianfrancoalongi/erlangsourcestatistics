@@ -14,7 +14,7 @@ analyse(AST, _Opts) ->
 
 analyze_function(AST) ->
     sort([{depth, structural_depth(AST)},
-          {expressions_per_function, number_of_expressions_for_function(AST)},
+          {expressions_per_function, lines_per_function(AST)},
           {clauses, clauses_per_function(AST)},
           {arity, function_arity(AST)},
           {expressions_per_line, expressions_per_function_line(AST)},
@@ -25,15 +25,15 @@ sort(L) -> lists:sort(L).
 
 usort(L) -> lists:usort(L).
     
-expressions_per_function_line(AST) ->
-    LNs = get_linenumbers(AST),
+expressions_per_function_line({function,_,_,_,Clauses}) -> 
+    LNs = [ get_toplevel_linenumbers(C) || C <- Clauses],
     ROSL = repeats_on_same_line(lists:flatten(LNs)),
     {lists:max(ROSL), lists:min(ROSL), avg_sum(ROSL)}.
 
 avg_sum(L) ->
     round(lists:sum(L) / length(L)).
 
-number_of_expressions_for_function(AST) ->
+lines_per_function(AST) ->
     LNs = get_linenumbers(AST),
     length(lists:usort(lists:flatten(LNs))).
 
@@ -116,7 +116,6 @@ is_variable_stepping(V1, V2) ->
     is_all_integers(V1) andalso is_all_integers(V2).
 
 is_all_integers(L) ->
-    io:format("is all int: ~p~n", [L]),
     lists:all(fun is_ascii_integer/1, L).
 
 is_ascii_integer(X) when (X>=$0), (X=<$9) -> true; 
@@ -126,7 +125,7 @@ is_ascii_integer(_) -> false.
 structural_depth(L) when is_list(L) ->
     lists:sum([ structural_depth(X) || X <- L ]);
 structural_depth({function, _, _, _, Clauses}) ->
-    structural_depth(Clauses);
+    lists:max([ structural_depth(X) || X <- Clauses ]);
 structural_depth({clause, _, Match, Guards, Exprs}) ->
     structural_depth(Match) 
 	+ structural_depth(Guards) 
@@ -170,7 +169,6 @@ structural_depth({var,_,_}) -> 0;
 structural_depth({string,_,_}) -> 0;
 structural_depth({integer,_,_}) -> 0.
 
-
 repeats_on_same_line(LNs) ->
     repeats_on_same_line(LNs,hd(LNs),0).
 
@@ -182,6 +180,10 @@ repeats_on_same_line([],_,Counted) ->
     [ Counted ].
 
 
+get_toplevel_linenumbers({clause,_Line,_,_,Expressions}) ->
+    [element(2,L) || L <- Expressions].
+
+
 get_linenumbers({function,_Line,_,_,Clauses}) ->    
     [ get_linenumbers(C) || C <- Clauses ];
 get_linenumbers({clause,_Line,_,_,Expressions}) ->
@@ -189,14 +191,20 @@ get_linenumbers({clause,_Line,_,_,Expressions}) ->
 
 get_linenumbers_body([]) ->
     [];
-get_linenumbers_body([{Marker,LN,_}|T]) when is_atom(Marker) ->
-    [LN|get_linenumbers_body(T)];
+get_linenumbers_body([{match,L,LHS,RHS}|R]) ->
+    RHSLines = get_linenumbers_body([RHS]),
+    LHSLines = get_linenumbers_body([LHS]),
+    [L|LHSLines]++RHSLines++get_linenumbers_body(R);
 get_linenumbers_body([{'case',L,_,Clauses}|R]) ->
     CaseLines = get_linenumbers_body(Clauses),
     [L|CaseLines] ++ get_linenumbers_body(R);
-get_linenumbers_body([{'receive',L,_,Clauses}|R]) ->
+get_linenumbers_body([{'receive', L, Clauses}|R]) ->
     CaseLines = get_linenumbers_body(Clauses),
     [L|CaseLines] ++ get_linenumbers_body(R);
+get_linenumbers_body([{'receive', L, Clauses, _, AfterExprs}|R]) ->
+    CaseLines = get_linenumbers_body(Clauses),
+    AfterLines = get_linenumbers_body(AfterExprs),
+    [L|CaseLines++AfterLines] ++ get_linenumbers_body(R);
 get_linenumbers_body([{'call',L,_, Args}|R]) ->
     ArgsLines = get_linenumbers_body(Args),
     [L|ArgsLines] ++ get_linenumbers_body(R);
@@ -206,6 +214,9 @@ get_linenumbers_body([{clause,L,_,_,Expressions}|R]) ->
 get_linenumbers_body([{nil,L}|R]) ->
     [L|get_linenumbers_body(R)];
 get_linenumbers_body([{op,L,_,_,_}|R]) ->
-    [L|get_linenumbers_body(R)].
+    [L|get_linenumbers_body(R)];
+get_linenumbers_body([{Marker,LN,_}|T]) when is_atom(Marker) ->
+    [LN|get_linenumbers_body(T)].
+
 
 
