@@ -2,8 +2,14 @@
 -include_lib("eunit/include/eunit.hrl").
 -compile(export_all).
 
-number_of_expressions_per_function_test_() ->
-    [ fun one/0,
+lines_per_function_test_() ->
+    [ {"receive",
+       fun() ->
+               AST = str2ast("f() -> receive _ -> 3+3, A=g(), 25 end."),
+               Res = ess:lines_per_function(AST),
+               ?assertEqual(1, Res)
+       end},
+      fun one/0,
       fun large/0
     ].
 
@@ -49,16 +55,6 @@ expressions_per_line_numbers_test_() ->
                Res = ess:expressions_per_function_line(AST),
                ?assertEqual({1,1,1}, Res) 
        end}].
-
-lines_per_function_test_() ->
-    [ {"receive",
-       fun() ->
-               AST = str2ast("f() -> receive _ -> 3+3, A=g(), 25 end."),
-               Res = ess:lines_per_function(AST),
-               ?assertEqual(1, Res)
-       end}].
-
-
 
 structural_depth_test_() ->
     [ make_test_case(X) || X <- structural_depth_test_cases() ].
