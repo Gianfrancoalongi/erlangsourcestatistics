@@ -10,7 +10,42 @@ file(F, Opts) ->
     analyse(AST,Opts).
 
 analyse(AST, _Opts) -> 
-    io:format("Analysing:~p~n",[AST]).
+    Fs = [analyze_function(F) || F <- AST, is_ast_function(F)],
+    aggregate(Fs).
+
+aggregate(Fs) ->
+    group_on_tag(Fs).
+
+group_on_tag(Fs) ->
+    Keys = sort(proplists:get_keys(hd(Fs))),
+    All_results = lists:flatten(Fs),
+    aggregate2([ {Key, proplists:get_all_values(Key,All_results)} || Key <- Keys ]).
+
+aggregate2(L) ->
+    [ {Key,aggregate_values(Values)} || {Key,Values} <- L].
+
+aggregate_values(L) ->
+    Max = lists:max(get_max_values(L)),
+    Min = lists:min(get_min_values(L)),
+    Mean = lists_mean(get_mean_values(L)),
+    {Max, Min, Mean}.
+
+get_max_values(L) -> [value_max(X) || X <- L].
+get_min_values(L) -> [value_min(X) || X <- L].
+get_mean_values(L) -> [value_mean(X) || X <- L].
+
+value_max({M, _, _}) -> M;
+value_max(M) when is_integer(M) -> M.
+
+value_min({_, M, _}) -> M;
+value_min(M) when is_integer(M) -> M.
+
+value_mean({_, _, M}) -> M;
+value_mean(M) when is_integer(M) -> M.
+
+lists_mean(L) ->
+    avg_sum(L).
+
 
 analyze_function(AST) ->
     sort([{complexity, structural_complexity(AST)},
@@ -36,6 +71,9 @@ avg_sum(L) ->
 lines_per_function(AST) ->
     LNs = get_linenumbers(AST),
     length(lists:usort(lists:flatten(LNs))).
+
+is_ast_function(X) when element(1,X) == function -> true;
+is_ast_function(_) -> false.
 
 function_clauses(F) ->
     element(5, F).
