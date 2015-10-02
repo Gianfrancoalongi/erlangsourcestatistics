@@ -13,7 +13,7 @@ analyse(AST, _Opts) ->
     io:format("Analysing:~p~n",[AST]).
 
 analyze_function(AST) ->
-    sort([{depth, structural_depth(AST)},
+    sort([{complexity, structural_complexity(AST)},
           {expressions_per_function, lines_per_function(AST)},
           {clauses, clauses_per_function(AST)},
           {arity, function_arity(AST)},
@@ -122,52 +122,52 @@ is_ascii_integer(X) when (X>=$0), (X=<$9) -> true;
 is_ascii_integer(_) -> false.
 
 
-structural_depth(L) when is_list(L) ->
-    lists:sum([ structural_depth(X) || X <- L ]);
-structural_depth({function, _, _, _, Clauses}) ->
-    lists:max([ structural_depth(X) || X <- Clauses ]);
-structural_depth({clause, _, Match, Guards, Exprs}) ->
-    structural_depth(Match) 
-	+ structural_depth(Guards) 
-	+ structural_depth(Exprs);
-structural_depth({match,_,RHS,LHS}) ->
-    1+structural_depth(RHS) + structural_depth(LHS);
-structural_depth({call,_, _, Args}) ->
-    1+structural_depth(Args);
-structural_depth({bin,_, Elems}) ->
-    1+structural_depth(Elems);
-structural_depth({bin_element,_, Elem, _, _}) ->
-    structural_depth(Elem);
-structural_depth({'case',_, Expr, Clauses}) ->
-    1 + structural_depth(Expr) + structural_depth(Clauses);
-structural_depth({'if',_, Clauses}) ->
-    1 + structural_depth(Clauses);
-structural_depth({'receive',_,Clauses}) ->
-    1 + structural_depth(Clauses);
-structural_depth({'receive',_,Clauses, _, AfterExprs}) ->
-    1 + structural_depth(Clauses) + structural_depth(AfterExprs);
-structural_depth({cons,_,Hd, Tl}) ->
-    structural_depth(Hd) + structural_depth(Tl);
-structural_depth({record,_,_,Fields}) ->
-    1+structural_depth(Fields);
-structural_depth({record_field,_,_,Expr}) ->
-    1+structural_depth(Expr);
-structural_depth({tuple,_,Elements}) ->
-    1+structural_depth(Elements);
-structural_depth({op,_,_,LHS,RHS}) ->
-    1+structural_depth(LHS) + structural_depth(RHS);
-structural_depth({op,_,_,Expr}) ->
-    1+structural_depth(Expr);
-structural_depth({lc,_,Body,Generator}) ->
-    1+structural_depth(Body)+structural_depth(Generator);
-structural_depth({generate,_,Expr,Guards}) ->
-    structural_depth(Expr) + structural_depth(Guards);
+structural_complexity(L) when is_list(L) ->
+    lists:sum([ structural_complexity(X) || X <- L ]);
+structural_complexity({function, _, _, _, Clauses}) ->
+    lists:max([ structural_complexity(X) || X <- Clauses ]);
+structural_complexity({clause, _, Match, Guards, Exprs}) ->
+    structural_complexity(Match) 
+	+ structural_complexity(Guards) 
+	+ structural_complexity(Exprs);
+structural_complexity({match,_,RHS,LHS}) ->
+    1+structural_complexity(RHS) + structural_complexity(LHS);
+structural_complexity({call,_, _, Args}) ->
+    1+structural_complexity(Args);
+structural_complexity({bin,_, Elems}) ->
+    1+structural_complexity(Elems);
+structural_complexity({bin_element,_, Elem, _, _}) ->
+    structural_complexity(Elem);
+structural_complexity({'case',_, Expr, Clauses}) ->
+    1 + structural_complexity(Expr) + structural_complexity(Clauses);
+structural_complexity({'if',_, Clauses}) ->
+    1 + structural_complexity(Clauses);
+structural_complexity({'receive',_,Clauses}) ->
+    1 + structural_complexity(Clauses);
+structural_complexity({'receive',_,Clauses, _, AfterExprs}) ->
+    1 + structural_complexity(Clauses) + structural_complexity(AfterExprs);
+structural_complexity({cons,_,Hd, Tl}) ->
+    structural_complexity(Hd) + structural_complexity(Tl);
+structural_complexity({record,_,_,Fields}) ->
+    1+structural_complexity(Fields);
+structural_complexity({record_field,_,_,Expr}) ->
+    1+structural_complexity(Expr);
+structural_complexity({tuple,_,Elements}) ->
+    1+structural_complexity(Elements);
+structural_complexity({op,_,_,LHS,RHS}) ->
+    1+structural_complexity(LHS) + structural_complexity(RHS);
+structural_complexity({op,_,_,Expr}) ->
+    1+structural_complexity(Expr);
+structural_complexity({lc,_,Body,Generator}) ->
+    1+structural_complexity(Body)+structural_complexity(Generator);
+structural_complexity({generate,_,Expr,Guards}) ->
+    structural_complexity(Expr) + structural_complexity(Guards);
 
-structural_depth({nil,_}) -> 0;
-structural_depth({atom,_,_}) -> 0;
-structural_depth({var,_,_}) -> 0;
-structural_depth({string,_,_}) -> 0;
-structural_depth({integer,_,_}) -> 0.
+structural_complexity({nil,_}) -> 0;
+structural_complexity({atom,_,_}) -> 0;
+structural_complexity({var,_,_}) -> 0;
+structural_complexity({string,_,_}) -> 0;
+structural_complexity({integer,_,_}) -> 0.
 
 repeats_on_same_line(LNs) ->
     repeats_on_same_line(LNs,hd(LNs),0).
