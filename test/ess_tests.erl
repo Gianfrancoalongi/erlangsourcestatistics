@@ -9,19 +9,25 @@ lines_per_function_test_() ->
                Res = ess:lines_per_function(AST),
                ?assertEqual(1, Res)
        end},
-      fun one/0,
-      fun large/0
+      {"one", 
+       fun() ->
+               AST = str2ast("b() -> this_one."),
+               Res = ess:lines_per_function(AST),
+               ?assertEqual(1, Res)
+       end},
+      {"nil", 
+       fun() ->
+               AST = str2ast("b() -> []."),
+               Res = ess:lines_per_function(AST),
+               ?assertEqual(1, Res)
+       end},
+      {"large",
+       fun() ->
+               AST = str2ast(large_func()),
+               Res = ess:lines_per_function(AST),
+               ?assertEqual(17, Res)
+       end}
     ].
-
-one() ->
-    AST = str2ast("b() -> this_one."),
-    Res = ess:lines_per_function(AST),
-    ?assertEqual(1, Res).
-
-large() ->
-    AST = str2ast(large_func()),
-    Res = ess:lines_per_function(AST),
-    ?assertEqual(17, Res).
 
 expressions_per_line_numbers_test_() ->
     [ {"simple",
