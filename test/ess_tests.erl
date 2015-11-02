@@ -304,5 +304,13 @@ stepping_test_() ->
       end
      }].
 
+get_compile_include_path_test_() ->
+    Res = ess:get_compile_include_path("../test/sbg_inc.conf"),
+    L = [{i, "/home/ejunyin/proj/sgc/src/sgc/reg/include"},
+         {i, "/home/ejunyin/proj/sgc/src/syf/ccpc/include/"},
+         {i, "/home/ejunyin/proj/sgc/src/syf/sys/sys_erl/include/"},
+         {i, "/home/ejunyin/proj/sgc/src/syf/sip/include/"}],
+    ?assertEqual(L, Res).
+    
 
 
