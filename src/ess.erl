@@ -1,10 +1,24 @@
 -module(ess).
 -compile(export_all).
 
+get_compile_include_path([]) ->
+    [];
+get_compile_include_path(IncFilePath) ->
+    case file:read_file(IncFilePath) of
+        {ok, Data} ->
+	    Lines = binary:split(Data, [<<"\n">>], [global]),
+	    [{i, binary_to_list(Line)} || Line <- Lines, Line =/= <<>>];
+	_ ->
+	    []
+    end.
+
 file(F) ->
-    file(F, []).
+    file(F, [], []).
 file(F, Opts) ->
-    {ok,Mod,Bin} = compile:file(F,[binary,debug_info]),
+    file(F, Opts, []).
+file(F, Opts, IncFile) ->
+    IncPath = get_compile_include_path(IncFile),
+    {ok,Mod,Bin} = compile:file(F,[binary,debug_info] ++ IncPath),
     {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
         beam_lib:chunks(Bin,[abstract_code]),
     analyse(AST,Opts).
