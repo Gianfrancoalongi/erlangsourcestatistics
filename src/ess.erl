@@ -202,7 +202,13 @@ structural_complexity({cons,_,Hd, Tl}) ->
     structural_complexity(Hd) + structural_complexity(Tl);
 structural_complexity({record,_,_,Fields}) ->
     1+structural_complexity(Fields);
+structural_complexity({record,_,Var,_,RecordField}) ->
+    1+structural_complexity(Var)+structural_complexity(RecordField);
 structural_complexity({record_field,_,_,Expr}) ->
+    1+structural_complexity(Expr);
+structural_complexity({record_field,_,Expr1,_,Expr2}) ->
+    1+structural_complexity(Expr1)+structural_complexity(Expr2);
+structural_complexity({record_index,_,_,Expr}) ->
     1+structural_complexity(Expr);
 structural_complexity({tuple,_,Elements}) ->
     1+structural_complexity(Elements);
@@ -214,12 +220,23 @@ structural_complexity({lc,_,Body,Generator}) ->
     1+structural_complexity(Body)+structural_complexity(Generator);
 structural_complexity({generate,_,Expr,Guards}) ->
     structural_complexity(Expr) + structural_complexity(Guards);
+structural_complexity({'catch',_,CallExpr}) ->
+    1+structural_complexity(CallExpr);
+structural_complexity({'fun',_,Expr}) ->
+    1+structural_complexity(Expr);
+structural_complexity({clauses,Clauses}) ->
+    0+structural_complexity(Clauses);
+structural_complexity({'try',_,CallExprs,_,Exprs,_})->
+    1+structural_complexity(CallExprs)+structural_complexity(Exprs);
 
+structural_complexity({function,_,_}) -> 0;
+structural_complexity({function,_,_,_}) -> 0;
 structural_complexity({nil,_}) -> 0;
 structural_complexity({atom,_,_}) -> 0;
 structural_complexity({var,_,_}) -> 0;
 structural_complexity({string,_,_}) -> 0;
-structural_complexity({integer,_,_}) -> 0.
+structural_complexity({integer,_,_}) -> 0;
+structural_complexity({char,_,_}) -> 0.
 
 repeats_on_same_line(LNs) ->
     repeats_on_same_line(LNs,hd(LNs),0).
@@ -260,6 +277,10 @@ get_linenumbers_body([{'receive', L, Clauses, _, AfterExprs}|R]) ->
 get_linenumbers_body([{'call',L,_, Args}|R]) ->
     ArgsLines = get_linenumbers_body(Args),
     [L|ArgsLines] ++ get_linenumbers_body(R);
+get_linenumbers_body([{'try',L,CallExprs,_,Exprs,_}|T])->
+    CallLines = get_linenumbers_body(CallExprs),
+    CatchLines = get_linenumbers_body(Exprs),
+    [L|CallLines++CatchLines] ++ get_linenumbers_body(T);
 get_linenumbers_body([{clause,L,_,_,Expressions}|R]) ->
     BodyLines = get_linenumbers_body(Expressions),
     [L|BodyLines] ++ get_linenumbers_body(R);
@@ -268,7 +289,12 @@ get_linenumbers_body([{nil,L}|R]) ->
 get_linenumbers_body([{op,L,_,_,_}|R]) ->
     [L|get_linenumbers_body(R)];
 get_linenumbers_body([{Marker,LN,_}|T]) when is_atom(Marker) ->
+    [LN|get_linenumbers_body(T)];
+get_linenumbers_body([{Marker,LN,_,_}|T]) when is_atom(Marker) ->
+    [LN|get_linenumbers_body(T)];
+get_linenumbers_body([{Marker,LN,_,_,_}|T]) when is_atom(Marker) ->
     [LN|get_linenumbers_body(T)].
+
 
 
 

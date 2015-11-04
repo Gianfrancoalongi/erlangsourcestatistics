@@ -60,7 +60,14 @@ expressions_per_line_numbers_test_() ->
                AST = str2ast("f() -> A = 1."),
                Res = ess:expressions_per_function_line(AST),
                ?assertEqual({1,1,1}, Res) 
-       end}].
+       end},
+       {"try",
+        fun() ->
+               AST = str2ast("f() -> try a() catch O ->done end."),
+               Res = ess:expressions_per_function_line(AST),
+               ?assertEqual({1,1,1}, Res) 
+        end}
+     ].
 
 structural_complexity_test_() ->
     [ make_test_case(X) || X <- structural_complexity_test_cases() ].
@@ -99,7 +106,13 @@ structural_complexity_test_cases() ->
      {"case clause 3","f() -> case g() of 1 -> 2+1; 2 -> 1 end.", 3, structural_complexity},
      {"if clause","f() -> if false -> true; true -> false end.", 1, structural_complexity},
      {"receive","f() -> receive 1 -> 2+1; 2 -> 1 end.", 2, structural_complexity},
-     {"receive after","f() -> receive 1 -> 1 after 3 -> 1+2 end.", 2, structural_complexity}
+     {"receive after","f() -> receive 1 -> 1 after 3 -> 1+2 end.", 2, structural_complexity},
+     {"record","f(C#s{a=undefined}) -> ok.",2, structural_complexity},
+     {"record_nest", "f(C#s.s1) -> ok.", 1, structural_complexity},
+     {"record_index","f(#regC.eri, O) ->ok.",1, structural_complexity},
+     {"catch","f()-> case catch a:b(C) of ok -> 1 end.",3,structural_complexity},
+     {"fun","f(fun(C) -> a(C) end) -> ok.",2,structural_complexity},
+     {"try","f() ->try a() catch O -> done end.",3,structural_complexity}
     ].
 
 analyze_function_test() ->
@@ -304,13 +317,13 @@ stepping_test_() ->
       end
      }].
 
-get_compile_include_path_test_() ->
+get_compile_include_path_test() ->
     Res = ess:get_compile_include_path("../test/sbg_inc.conf"),
-    L = [{i, "/home/ejunyin/proj/sgc/src/sgc/reg/include"},
-         {i, "/home/ejunyin/proj/sgc/src/syf/ccpc/include/"},
-         {i, "/home/ejunyin/proj/sgc/src/syf/sys/sys_erl/include/"},
-         {i, "/home/ejunyin/proj/sgc/src/syf/sip/include/"}],
-    ?assertEqual(L, Res).
+    L = [{i, "/local/scratch/ejunyin/proj/sgc/src/sgc/reg/include"},
+         {i, "/local/scratch/ejunyin/proj/sgc/src/syf/ccpc/include/"},
+         {i, "/local/scratch/ejunyin/proj/sgc/src/syf/sys/sys_erl/include/"},
+         {i, "/local/scratch/ejunyin/proj/sgc/src/syf/sip/include/"}],
+    ?assertEqual(L, Res).   
     
 
 
