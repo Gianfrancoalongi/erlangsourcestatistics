@@ -12,6 +12,22 @@ get_compile_include_path(IncFilePath) ->
 	    []
     end.
 
+folder(F) ->
+    folder(F, [], []).
+folder(F, Opts) ->
+    folder(F, Opts, []).
+folder(F, Opts, IncFile) ->
+    case filelib:is_dir(F) of
+        true ->
+            [[{filename, File}] ++ file(File, Opts, IncFile) || File <- get_all_files(F)];
+        false ->
+            []
+    end.				      
+
+%% fetch all erlang files under specified folder recursively.
+get_all_files(Folder) ->
+    filelib:fold_files(Folder, ".*.erl", true, fun(File, AccIn) -> [File | AccIn] end, []).
+
 file(F) ->
     file(F, [], []).
 file(F, Opts) ->
@@ -228,6 +244,8 @@ structural_complexity({clauses,Clauses}) ->
     0+structural_complexity(Clauses);
 structural_complexity({'try',_,CallExprs,_,Exprs,_})->
     1+structural_complexity(CallExprs)+structural_complexity(Exprs);
+structural_complexity({block, _, CallExprs}) ->
+    1+structural_complexity(CallExprs);
 
 structural_complexity({function,_,_}) -> 0;
 structural_complexity({function,_,_,_}) -> 0;
