@@ -325,5 +325,7 @@ get_compile_include_path_test() ->
          {i, "/local/scratch/ejunyin/proj/sgc/src/syf/sip/include/"}],
     ?assertEqual(L, Res).   
     
-
-
+get_all_files_test() ->
+    Res = ess:get_all_files("../src/"),
+    L = ["../src/ess.erl"],
+    ?assertEqual(L, Res).
