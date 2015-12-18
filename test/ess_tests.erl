@@ -198,6 +198,18 @@ analyze_simple_module_test() ->
                            ]),
     ?assertEqual(Expected, Res).
 
+analyze_less_simple_module_test() ->
+    Res = ess:file("../test/file_read_test_2.erl"),
+    Expected = lists:sort([{arity, {4,1,3}},
+                           {clauses, {3,1,2}},
+                           {complexity, {12,0,4}},
+                           {variable_steppings, {0,0,0}},
+                           {expressions_per_line, {1,1,1}},
+                           {expressions_per_function, {10,1,4}}
+                           ]),
+    ?assertEqual(Expected, Res).
+    
+
 clauses_per_function_test_() ->
     [{"one",
       fun() ->
