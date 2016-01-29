@@ -341,3 +341,15 @@ get_all_files_test() ->
     Res = ess:get_all_files("../src/"),
     L = ["../src/ess.erl"],
     ?assertEqual(L, Res).
+
+analyze_directory_test() ->
+    Res = ess:dir("../test/test_dir/"),
+    Expected = {"../test/test_dir/",
+                lists:sort([{arity,{2,1,2}},
+                            {clauses,{1,1,1}},
+                            {complexity,{1,1,1}},
+                            {expressions_per_function,{1,1,1}},
+                            {expressions_per_line,{1,1,1}},
+                            {variable_steppings,{1,0,1}}
+                           ])},
+    ?assertMatch([Expected|_], Res).

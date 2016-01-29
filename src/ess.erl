@@ -12,21 +12,39 @@ get_compile_include_path(IncFilePath) ->
 	    []
     end.
 
-folder(F) ->
-    folder(F, [], []).
-folder(F, Opts) ->
-    folder(F, Opts, []).
-folder(F, Opts, IncFile) ->
+dir(F) ->
+    dir(F, [], []).
+dir(F, Opts) ->
+    dir(F, Opts, []).
+dir(F, Opts, IncFile) ->
     case filelib:is_dir(F) of
         true ->
-            [[{filename, File}] ++ file(File, Opts, IncFile) || File <- get_all_files(F)];
+            Files = get_all_files(F),
+            Stats = [ file(File, Opts, IncFile) || File <- Files ],
+            Aggregated = aggregate(Stats),
+            [{F,Aggregated} | lists:zip(Files, Stats)];
         false ->
             []
-    end.				      
+    end.
 
+%% aggregate([]) ->
+%%     [];
+%% aggregate(Stats) ->
+%%     {Firsts,Rests} = take_first_from_all_lists(Stats),
+%%     Res = aggregate_values(Firsts),
+%%     [ Res | aggregate(Rests)].
+
+take_first_from_all_lists(Input) ->
+    take_first_from_all_lists(Input,[],[]).
+
+take_first_from_all_lists([[]|_],Firsts,Rests) ->
+    {Firsts, Rests};
+take_first_from_all_lists([[First|Rest]|T],Firsts,Rests) ->
+    take_first_from_all_lists(T,[First|Firsts],[Rest|Rests]).
+    
 %% fetch all erlang files under specified folder recursively.
 get_all_files(Folder) ->
-    filelib:fold_files(Folder, ".*.erl", true, fun(File, AccIn) -> [File | AccIn] end, []).
+    filelib:fold_files(Folder, ".*.erl$", true, fun(File, AccIn) -> [File | AccIn] end, []).
 
 file(F) ->
     file(F, [], []).
