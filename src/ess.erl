@@ -12,21 +12,54 @@ get_compile_include_path(IncFilePath) ->
 	    []
     end.
 
-folder(F) ->
-    folder(F, [], []).
-folder(F, Opts) ->
-    folder(F, Opts, []).
-folder(F, Opts, IncFile) ->
-    case filelib:is_dir(F) of
-        true ->
-            [[{filename, File}] ++ file(File, Opts, IncFile) || File <- get_all_files(F)];
-        false ->
-            []
-    end.				      
+dir(F) ->
+    dir(F, [], []).
+dir(F, Opts) ->
+    dir(F, Opts, []).
+dir(F, Opts, IncFile) ->
+    Tree = recursive_dir([F]),
+    ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
+    hd(traverse(Tree, ForEachFileFun)).
 
-%% fetch all erlang files under specified folder recursively.
+traverse([{Dir,Files,SubDirs}|R], Fun) ->
+    Stats = for_each_file(Files, Fun) ++ traverse(SubDirs, Fun),
+    Aggregated = aggregate(Stats),
+    [{Dir, Aggregated, Stats} | traverse(R, Fun) ];
+traverse([], _Fun) ->
+    [].
+
+for_each_file(Files, Fun) ->
+    [{File, Fun(File)} || File <- Files].
+
+recursive_dir([]) -> 
+    [];
+recursive_dir([Dir|R]) ->
+    {ok, Files} = file:list_dir(Dir),    
+    FullNames = [ filename:join(Dir,F) || F <- Files ],
+    DirFiles = [ F || F <- FullNames, not filelib:is_dir(F), is_erlang_source_file(F) ],
+    Dirs = [ F || F <- FullNames, filelib:is_dir(F) ],
+    RecursiveStuff = recursive_dir(Dirs),
+    Res = case {DirFiles, RecursiveStuff} of
+              {[], []} ->
+                  [];
+              _ -> 
+                  [{Dir, DirFiles, recursive_dir(Dirs)}]
+          end,            
+    Res  ++ recursive_dir(R).
+
+is_erlang_source_file(F) ->
+    filename:extension(F) == ".erl".
+
+take_first_from_all_lists(Input) ->
+    take_first_from_all_lists(Input,[],[]).
+
+take_first_from_all_lists([[]|_],Firsts,Rests) ->
+    {Firsts, Rests};
+take_first_from_all_lists([[First|Rest]|T],Firsts,Rests) ->
+    take_first_from_all_lists(T,[First|Firsts],[Rest|Rests]).
+    
 get_all_files(Folder) ->
-    filelib:fold_files(Folder, ".*.erl", true, fun(File, AccIn) -> [File | AccIn] end, []).
+    filelib:fold_files(Folder, ".*.erl$", true, fun(File, AccIn) -> [File | AccIn] end, []).
 
 file(F) ->
     file(F, [], []).
@@ -43,8 +76,15 @@ analyse(AST, _Opts) ->
     Fs = [analyze_function(F) || F <- AST, is_ast_function(F)],
     aggregate(Fs).
 
+%%% TODO: There is a bug here somewhere,
+%%% analyze_deep_directory_test(), look at variable_steppings
 aggregate(Fs) ->
-    group_on_tag(Fs).
+    group_on_tag(remove_any_names(Fs)).
+
+remove_any_names(L) ->
+    lists:map(fun({_Name=[_|_], Values}) when is_list(Values) -> Values;
+                 (Values) -> Values 
+              end, L).
 
 group_on_tag(Fs) ->
     Keys = sort(proplists:get_keys(hd(Fs))),

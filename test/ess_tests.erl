@@ -336,8 +336,64 @@ get_compile_include_path_test() ->
          {i, "/local/scratch/ejunyin/proj/sgc/src/syf/sys/sys_erl/include/"},
          {i, "/local/scratch/ejunyin/proj/sgc/src/syf/sip/include/"}],
     ?assertEqual(L, Res).   
-    
+
 get_all_files_test() ->
     Res = ess:get_all_files("../src/"),
     L = ["../src/ess.erl"],
     ?assertEqual(L, Res).
+
+analyze_directory_test() ->
+    Res = ess:dir("../test/test_dir/"),
+    AggregateValues = lists:sort([{arity,{2,1,2}},
+                                  {clauses,{1,1,1}},
+                                  {complexity,{1,1,1}},
+                                  {expressions_per_function,{1,1,1}},
+                                  {expressions_per_line,{1,1,1}},
+                                  {variable_steppings,{1,0,1}}
+                                 ]),
+    ValuesForA = {"../test/test_dir/a.erl",
+                  [{arity,{1,1,1}},
+                   {clauses,{1,1,1}},
+                   {complexity,{1,1,1}},
+                   {expressions_per_function,{1,1,1}},
+                   {expressions_per_line,{1,1,1}},
+                   {variable_steppings,{0,0,0}}]},
+    
+    ValuesForB = {"../test/test_dir/b.erl",
+                  [{arity,{2,2,2}},
+                   {clauses,{1,1,1}},
+                   {complexity,{1,1,1}},
+                   {expressions_per_function,{1,1,1}},
+                   {expressions_per_line,{1,1,1}},
+                   {variable_steppings,{1,1,1}}]},
+    
+    Expected = {"../test/test_dir/", AggregateValues, [ValuesForA, ValuesForB]},
+    ?assertMatch(Expected, Res).
+
+analyze_deep_directory_test() ->
+    Dir = "../test/",
+    Res = ess:dir(Dir),
+    AggregateValues = lists:sort([{arity,{4,0,1}},
+                                  {clauses,{3,1,1}},
+                                  {complexity,{54,0,6}},
+                                  {expressions_per_function,{10,1,3}},
+                                  {expressions_per_line,{1,1,1}},
+                                  {variable_steppings,{0,0,0}}
+                                 ]),
+    ?assertMatch({Dir, AggregateValues, _}, Res).
+
+
+recurse_deep_directory_test() ->
+    Res = ess:recursive_dir(["../test/"]),
+    Expected = [{"../test/",
+                 ["../test/file_read_test_2.erl",
+                  "../test/file_read_test.erl",
+                  "../test/ess_tests.erl"],
+                 [{"../test/test_dir",
+                   ["../test/test_dir/a.erl",
+                    "../test/test_dir/b.erl"],
+                   []}
+                 ]}],
+    ?assertMatch(Expected, Res).
+
+
