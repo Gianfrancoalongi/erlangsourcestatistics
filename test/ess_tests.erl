@@ -336,7 +336,7 @@ get_compile_include_path_test() ->
          {i, "/local/scratch/ejunyin/proj/sgc/src/syf/sys/sys_erl/include/"},
          {i, "/local/scratch/ejunyin/proj/sgc/src/syf/sip/include/"}],
     ?assertEqual(L, Res).   
-    
+
 get_all_files_test() ->
     Res = ess:get_all_files("../src/"),
     L = ["../src/ess.erl"],
@@ -367,42 +367,35 @@ analyze_directory_test() ->
                    {expressions_per_line,{1,1,1}},
                    {variable_steppings,{1,1,1}}]},
     
-    {Dir, Agg, [A, B]} = Res,
-    
-    ?assertEqual("../test/test_dir/", Dir),
-    
-    ?assertEqual(AggregateValues, Agg),
-    ?assertEqual(A, ValuesForA),
-    ?assertEqual(B, ValuesForB),
-
-    
-%%     {"../test/test_dir/",
-%%      [{arity,{2,1,2}},
-%%       {clauses,{1,1,1}},
-%%       {complexity,{1,1,1}},
-%%       {expressions_per_function,{1,1,1}},
-%%       {expressions_per_line,{1,1,1}},
-%%       {variable_steppings,{1,0,1}}],
-%%      [{"../test/test_dir/a.erl",
-%%        [{arity,{1,1,1}},
-%%         {clauses,{1,1,1}},
-%%         {complexity,{1,1,1}},
-%%         {expressions_per_function,{1,1,1}},
-%%         {expressions_per_line,{1,1,1}},
-%%         {variable_steppings,{0,0,0}}]},
-%%       {"../test/test_dir/b.erl",
-%%        [{arity,{2,2,2}},
-%%         {clauses,{1,1,1}},
-%%         {complexity,{1,1,1}},
-%%         {expressions_per_function,{1,1,1}},
-%%         {expressions_per_line,{1,1,1}},
-%%         {variable_steppings,{1,1,1}}]}
-%%      ]}
-        
-
-
-
     Expected = {"../test/test_dir/", AggregateValues, [ValuesForA, ValuesForB]},
+    ?assertMatch(Expected, Res).
+
+analyze_deep_gotdirectory_test() ->
+    Res = ess:dir("../test/"),
+    AggregateValues = lists:sort([{arity,{2,1,2}},
+                                  {clauses,{1,1,1}},
+                                  {complexity,{1,1,1}},
+                                  {expressions_per_function,{1,1,1}},
+                                  {expressions_per_line,{1,1,1}},
+                                  {variable_steppings,{1,0,1}}
+                                 ]),
+    ValuesForA = {"../test/test_dir/a.erl",
+                  [{arity,{1,1,1}},
+                   {clauses,{1,1,1}},
+                   {complexity,{1,1,1}},
+                   {expressions_per_function,{1,1,1}},
+                   {expressions_per_line,{1,1,1}},
+                   {variable_steppings,{0,0,0}}]},
+    
+    ValuesForB = {"../test/test_dir/b.erl",
+                  [{arity,{2,2,2}},
+                   {clauses,{1,1,1}},
+                   {complexity,{1,1,1}},
+                   {expressions_per_function,{1,1,1}},
+                   {expressions_per_line,{1,1,1}},
+                   {variable_steppings,{1,1,1}}]},
+    
+    Expected = {"../test/", AggregateValues, [ValuesForA, ValuesForB]},
     ?assertMatch(Expected, Res).
 
 
