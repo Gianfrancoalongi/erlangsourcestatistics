@@ -17,15 +17,23 @@ dir(F) ->
 dir(F, Opts) ->
     dir(F, Opts, []).
 dir(F, Opts, IncFile) ->
-    case filelib:is_dir(F) of
-        true ->
-            Files = get_all_files(F),
-            Stats = [ file(File, Opts, IncFile) || File <- Files ],
-            Aggregated = aggregate(Stats),
-            [{F,Aggregated} | lists:zip(Files, Stats)];
-        false ->
-            []
-    end.
+    Tree = recursive_dir([F]),
+    ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
+    hd(traverse(Tree, ForEachFileFun)).
+
+traverse([{Dir,Files,[]}|R], Fun) ->
+    Stats = for_each_file(Files, Fun), %%[ Fun(File) || File <- Files ],
+    Aggregated = aggregate(Stats),
+    [{Dir, Aggregated, Stats} | traverse(R, Fun) ];
+traverse([{Dir,[],SubDirs}|R], Fun) ->
+    DirStats = traverse(SubDirs, Fun),
+    Aggregated = aggregate(DirStats),
+    [{Dir, Aggregated, DirStats} | traverse(R, Fun) ];
+traverse([], _Fun) ->
+    [].
+
+for_each_file(Files, Fun) ->
+    [{File, Fun(File)} || File <- Files].
 
 recursive_dir([]) -> 
     [];
@@ -46,14 +54,6 @@ recursive_dir([Dir|R]) ->
 is_erlang_source_file(F) ->
     filename:extension(F) == ".erl".
 
-
-%% aggregate([]) ->
-%%     [];
-%% aggregate(Stats) ->
-%%     {Firsts,Rests} = take_first_from_all_lists(Stats),
-%%     Res = aggregate_values(Firsts),
-%%     [ Res | aggregate(Rests)].
-
 take_first_from_all_lists(Input) ->
     take_first_from_all_lists(Input,[],[]).
 
@@ -62,7 +62,6 @@ take_first_from_all_lists([[]|_],Firsts,Rests) ->
 take_first_from_all_lists([[First|Rest]|T],Firsts,Rests) ->
     take_first_from_all_lists(T,[First|Firsts],[Rest|Rests]).
     
-%% fetch all erlang files under specified folder recursively.
 get_all_files(Folder) ->
     filelib:fold_files(Folder, ".*.erl$", true, fun(File, AccIn) -> [File | AccIn] end, []).
 
@@ -82,7 +81,12 @@ analyse(AST, _Opts) ->
     aggregate(Fs).
 
 aggregate(Fs) ->
-    group_on_tag(Fs).
+    group_on_tag(remove_any_names(Fs)).
+
+remove_any_names(L) ->
+    lists:map(fun({_Name=[_|_], Values}) when is_list(Values) -> Values;
+                 (Values) -> Values 
+              end, L).
 
 group_on_tag(Fs) ->
     Keys = sort(proplists:get_keys(hd(Fs))),
