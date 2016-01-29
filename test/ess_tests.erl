@@ -353,3 +353,17 @@ analyze_directory_test() ->
                             {variable_steppings,{1,0,1}}
                            ])},
     ?assertMatch([Expected|_], Res).
+
+
+recurse_deep_directory_test() ->
+    Res = ess:recursive_dir(["../test/"]),
+    Expected = [{"../test/",
+                 ["../test/file_read_test_2.erl",
+                  "../test/file_read_test.erl",
+                  "../test/ess_tests.erl"],
+                 [{"../test/test_dir",
+                   ["../test/test_dir/a.erl",
+                    "../test/test_dir/b.erl"],
+                   []}
+                 ]}],
+    ?assertMatch(Expected, Res).
