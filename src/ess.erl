@@ -34,7 +34,14 @@ recursive_dir([Dir|R]) ->
     FullNames = [ filename:join(Dir,F) || F <- Files ],
     DirFiles = [ F || F <- FullNames, not filelib:is_dir(F), is_erlang_source_file(F) ],
     Dirs = [ F || F <- FullNames, filelib:is_dir(F) ],
-    [ {Dir, DirFiles, recursive_dir(Dirs)} | recursive_dir(R)].
+    RecursiveStuff = recursive_dir(Dirs),
+    Res = case {DirFiles, RecursiveStuff} of
+              {[], []} ->
+                  [];
+              _ -> 
+                  [{Dir, DirFiles, recursive_dir(Dirs)}]
+          end,            
+    Res  ++ recursive_dir(R).
 
 is_erlang_source_file(F) ->
     filename:extension(F) == ".erl".
