@@ -21,14 +21,10 @@ dir(F, Opts, IncFile) ->
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
     hd(traverse(Tree, ForEachFileFun)).
 
-traverse([{Dir,Files,[]}|R], Fun) ->
-    Stats = for_each_file(Files, Fun), %%[ Fun(File) || File <- Files ],
+traverse([{Dir,Files,SubDirs}|R], Fun) ->
+    Stats = for_each_file(Files, Fun) ++ traverse(SubDirs, Fun),
     Aggregated = aggregate(Stats),
     [{Dir, Aggregated, Stats} | traverse(R, Fun) ];
-traverse([{Dir,[],SubDirs}|R], Fun) ->
-    DirStats = traverse(SubDirs, Fun),
-    Aggregated = aggregate(DirStats),
-    [{Dir, Aggregated, DirStats} | traverse(R, Fun) ];
 traverse([], _Fun) ->
     [].
 
@@ -80,6 +76,8 @@ analyse(AST, _Opts) ->
     Fs = [analyze_function(F) || F <- AST, is_ast_function(F)],
     aggregate(Fs).
 
+%%% TODO: There is a bug here somewhere,
+%%% analyze_deep_directory_test(), look at variable_steppings
 aggregate(Fs) ->
     group_on_tag(remove_any_names(Fs)).
 
