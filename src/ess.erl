@@ -27,6 +27,19 @@ dir(F, Opts, IncFile) ->
             []
     end.
 
+recursive_dir([]) -> 
+    [];
+recursive_dir([Dir|R]) ->
+    {ok, Files} = file:list_dir(Dir),    
+    FullNames = [ filename:join(Dir,F) || F <- Files ],
+    DirFiles = [ F || F <- FullNames, not filelib:is_dir(F), is_erlang_source_file(F) ],
+    Dirs = [ F || F <- FullNames, filelib:is_dir(F) ],
+    [ {Dir, DirFiles, recursive_dir(Dirs)} | recursive_dir(R)].
+
+is_erlang_source_file(F) ->
+    filename:extension(F) == ".erl".
+
+
 %% aggregate([]) ->
 %%     [];
 %% aggregate(Stats) ->
