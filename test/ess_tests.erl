@@ -83,6 +83,7 @@ make_test_case({Label, Input, ExpectedResult, Function}) ->
 
 structural_complexity_test_cases() ->
     [{"base int", "f() -> 3.", 0,  structural_complexity},
+     {"base float", "f() -> 3.14.", 0,  structural_complexity},
      {"base atom", "f() -> ok.", 0,  structural_complexity},
      {"base var", "f() -> A.", 0,  structural_complexity},
      {"base string", "f() -> \"hej\".", 0,  structural_complexity},

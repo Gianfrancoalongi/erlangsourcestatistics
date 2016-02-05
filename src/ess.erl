@@ -73,7 +73,7 @@ file(F, Opts) ->
     file(F, Opts, []).
 file(F, Opts, IncFile) ->
     IncPath = get_compile_include_path(IncFile),
-    {ok,Mod,Bin} = compile:file(F,[binary,debug_info] ++ IncPath),
+    {ok,Mod,Bin} = compile:file(F,[binary,verbose, debug_info] ++ IncPath),
     {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
         beam_lib:chunks(Bin,[abstract_code]),
     #tree{type = file,
@@ -301,6 +301,7 @@ structural_complexity({atom,_,_}) -> 0;
 structural_complexity({var,_,_}) -> 0;
 structural_complexity({string,_,_}) -> 0;
 structural_complexity({integer,_,_}) -> 0;
+structural_complexity({float,_,_}) -> 0;
 structural_complexity({char,_,_}) -> 0.
 
 repeats_on_same_line(LNs) ->
