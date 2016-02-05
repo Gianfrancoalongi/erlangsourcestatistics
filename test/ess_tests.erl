@@ -1,5 +1,6 @@
 -module(ess_tests).
 -include_lib("eunit/include/eunit.hrl").
+-include("../src/ess.hrl").
 -compile(export_all).
 
 lines_per_function_test_() ->
@@ -188,25 +189,31 @@ analyze_function_with_recieve_after_test() ->
     ?assertEqual(Expected, Res).
 
 analyze_simple_module_test() ->
-    Res = ess:file("../test/file_read_test.erl"),
-    Expected = lists:sort([{arity, {0,0,0}},
-                           {clauses, {1,1,1}},
-                           {complexity, {0,0,0}},
-                           {variable_steppings, {0,0,0}},
-                           {expressions_per_line, {1,1,1}},
-                           {expressions_per_function, {2,1,2}}
-                           ]),
+    Name = "../test/test/file_read_test.erl",
+    Res = ess:file(Name),
+    Expected = #tree{type = file,
+                     name = Name,
+                     value = lists:sort([{arity, {0,0,0}},
+                                         {clauses, {1,1,1}},
+                                         {complexity, {0,0,0}},
+                                         {variable_steppings, {0,0,0}},
+                                         {expressions_per_line, {1,1,1}},
+                                         {expressions_per_function, {2,1,2}}
+                                        ])},
     ?assertEqual(Expected, Res).
 
 analyze_less_simple_module_test() ->
-    Res = ess:file("../test/file_read_test_2.erl"),
-    Expected = lists:sort([{arity, {4,1,3}},
-                           {clauses, {3,1,2}},
-                           {complexity, {12,0,4}},
-                           {variable_steppings, {0,0,0}},
-                           {expressions_per_line, {1,1,1}},
-                           {expressions_per_function, {10,1,4}}
-                           ]),
+    Name = "../test/test/file_read_test_2.erl",
+    Res = ess:file(Name),
+    Expected = #tree{type = file,
+                     name = Name,
+                     value = lists:sort([{arity, {4,1,3}},
+                                         {clauses, {3,1,2}},
+                                         {complexity, {12,0,4}},
+                                         {variable_steppings, {0,0,0}},
+                                         {expressions_per_line, {1,1,1}},
+                                         {expressions_per_function, {10,1,4}}
+                                        ])},
     ?assertEqual(Expected, Res).
     
 
@@ -343,7 +350,7 @@ get_all_files_test() ->
     ?assertEqual(L, Res).
 
 analyze_directory_test() ->
-    Res = ess:dir("../test/test_dir/"),
+    Res = ess:dir("../test/test/test_dir/"),
     AggregateValues = lists:sort([{arity,{2,1,2}},
                                   {clauses,{1,1,1}},
                                   {complexity,{1,1,1}},
@@ -351,49 +358,58 @@ analyze_directory_test() ->
                                   {expressions_per_line,{1,1,1}},
                                   {variable_steppings,{1,0,1}}
                                  ]),
-    ValuesForA = {"../test/test_dir/a.erl",
-                  [{arity,{1,1,1}},
-                   {clauses,{1,1,1}},
-                   {complexity,{1,1,1}},
-                   {expressions_per_function,{1,1,1}},
-                   {expressions_per_line,{1,1,1}},
-                   {variable_steppings,{0,0,0}}]},
+    ValuesForA = #tree{type = file,
+                       name = "../test/test/test_dir/a.erl",
+                       value = [{arity,{1,1,1}},
+                                {clauses,{1,1,1}},
+                                {complexity,{1,1,1}},
+                                {expressions_per_function,{1,1,1}},
+                                {expressions_per_line,{1,1,1}},
+                                {variable_steppings,{0,0,0}}]},
     
-    ValuesForB = {"../test/test_dir/b.erl",
-                  [{arity,{2,2,2}},
-                   {clauses,{1,1,1}},
-                   {complexity,{1,1,1}},
-                   {expressions_per_function,{1,1,1}},
-                   {expressions_per_line,{1,1,1}},
-                   {variable_steppings,{1,1,1}}]},
+    ValuesForB = #tree{type = file,
+                       name = "../test/test/test_dir/b.erl",
+                       value = [{arity,{2,2,2}},
+                                {clauses,{1,1,1}},
+                                {complexity,{1,1,1}},
+                                {expressions_per_function,{1,1,1}},
+                                {expressions_per_line,{1,1,1}},
+                                {variable_steppings,{1,1,1}}]},
     
-    Expected = {"../test/test_dir/", AggregateValues, [ValuesForA, ValuesForB]},
+    Expected = #tree{type = dir,
+                     name = "../test/test/test_dir/",
+                     value = AggregateValues,
+                     children = [ValuesForA, ValuesForB]},
     ?assertMatch(Expected, Res).
 
 analyze_deep_directory_test() ->
-    Dir = "../test/",
+    Dir = "../test/test/test_dir",
     Res = ess:dir(Dir),
-    AggregateValues = lists:sort([{arity,{4,0,1}},
-                                  {clauses,{3,1,1}},
-                                  {complexity,{54,0,6}},
-                                  {expressions_per_function,{10,1,3}},
+    AggregateValues = lists:sort([{arity,{2,1,2}},
+                                  {clauses,{1,1,1}},
+                                  {complexity,{1,1,1}},
+                                  {expressions_per_function,{1,1,1}},
                                   {expressions_per_line,{1,1,1}},
-                                  {variable_steppings,{0,0,0}}
+                                  {variable_steppings,{1,0,1}}
                                  ]),
-    ?assertMatch({Dir, AggregateValues, _}, Res).
+    ?assertMatch(#tree{type = dir,
+                       name = Dir,
+                       value = AggregateValues}, 
+                 Res).
 
 
 recurse_deep_directory_test() ->
-    Res = ess:recursive_dir(["../test/"]),
-    Expected = [{"../test/",
-                 ["../test/file_read_test_2.erl",
-                  "../test/file_read_test.erl",
-                  "../test/ess_tests.erl"],
-                 [{"../test/test_dir",
-                   ["../test/test_dir/a.erl",
-                    "../test/test_dir/b.erl"],
+    Res = ess:recursive_dir(["../test/test/"]),
+    Expected = [{"../test/test/",
+                 ["../test/test/file_read_test_2.erl",
+                  "../test/test/file_read_test.erl"],
+                 [{"../test/test/test_dir",
+                   ["../test/test/test_dir/a.erl",
+                    "../test/test/test_dir/b.erl"],
                    []}
                  ]}],
     ?assertMatch(Expected, Res).
 
 
+debug(X) ->
+    io:format(user,"~p~n",[X]).

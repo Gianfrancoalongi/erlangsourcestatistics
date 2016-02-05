@@ -1,4 +1,5 @@
 -module(ess).
+-include("ess.hrl").
 -compile(export_all).
 
 get_compile_include_path([]) ->
@@ -23,13 +24,18 @@ dir(F, Opts, IncFile) ->
 
 traverse([{Dir,Files,SubDirs}|R], Fun) ->
     Stats = for_each_file(Files, Fun) ++ traverse(SubDirs, Fun),
-    Aggregated = aggregate(Stats),
-    [{Dir, Aggregated, Stats} | traverse(R, Fun) ];
+    Aggregated = aggregate_trees(Stats),
+    Res = #tree{type = dir,
+                name = Dir,
+                value = Aggregated,
+                children = Stats},
+    [ Res | traverse(R, Fun) ];
+
 traverse([], _Fun) ->
     [].
 
 for_each_file(Files, Fun) ->
-    [{File, Fun(File)} || File <- Files].
+    [ Fun(File) || File <- Files ].
 
 recursive_dir([]) -> 
     [];
@@ -70,21 +76,22 @@ file(F, Opts, IncFile) ->
     {ok,Mod,Bin} = compile:file(F,[binary,debug_info] ++ IncPath),
     {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
         beam_lib:chunks(Bin,[abstract_code]),
-    analyse(AST,Opts).
+    #tree{type = file,
+          name = F,
+          value = analyse(AST, Opts)}.
 
 analyse(AST, _Opts) -> 
     Fs = [analyze_function(F) || F <- AST, is_ast_function(F)],
     aggregate(Fs).
 
-%%% TODO: There is a bug here somewhere,
-%%% analyze_deep_directory_test(), look at variable_steppings
-aggregate(Fs) ->
-    group_on_tag(remove_any_names(Fs)).
+aggregate_trees(Trees) ->
+    aggregate(extract_values(Trees)).
 
-remove_any_names(L) ->
-    lists:map(fun({_Name=[_|_], Values}) when is_list(Values) -> Values;
-                 (Values) -> Values 
-              end, L).
+extract_values(Trees) ->
+    [ T#tree.value || T <- Trees ].
+
+aggregate(Values) ->
+    group_on_tag(Values).
 
 group_on_tag(Fs) ->
     Keys = sort(proplists:get_keys(hd(Fs))),
