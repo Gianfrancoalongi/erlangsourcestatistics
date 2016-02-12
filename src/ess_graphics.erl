@@ -17,23 +17,27 @@ t() ->
     generate(Res).
 
 generate(AnalysisResults) ->
-    Tags = [T || {T, _} <- (hd(AnalysisResults))#tree.value ],
-    
-    [ generate_for_one_tag(AnalysisResults, Tag) || Tag <- Tags ].
-
-
-generate_for_one_tag(AnalysisResults, Tag) ->
-    RawData = [ {get_block_name(Dir), gv(Tag, Value)} || 
-                  #tree{name = Dir, value = Value} <- AnalysisResults ],
-    
-    DataPoints =  generate_datapoints(RawData),
-    MaxY = 5+maximum_average(RawData),
-    
-    Header = capitalize(a2l(Tag)),
-    HTML = generate_html(Header, MaxY, DataPoints),
+    Tags = [T || {T, _} <- (hd(AnalysisResults))#tree.value ],    
+    DivIds = lists:seq(1,length(Tags)),
+    JSCharts =
+        lists:map(
+          fun({Tag,DivId}) ->
+                  RawData = [ {get_block_name(Dir), gv(Tag, Value)} || 
+                                #tree{name = Dir, value = Value} <- AnalysisResults ],
+                  
+                  DataPoints =  generate_datapoints(RawData),
+                  MaxY = 5+maximum_average(RawData),
+                  
+                  Header = capitalize(a2l(Tag)),
+                  generate_chart_js(DivId, Header, MaxY, DataPoints)
+          end,
+          lists:zip(Tags,DivIds)),
+    Divs = generate_divs(DivIds),
+    Table = generate_table(Divs),
+    HTML = generate_html(Table, JSCharts),
     
     DstDir = "/home/etxpell/dev_patches",
-    FileName = filename:join(DstDir, Tag)++".html",
+    FileName = filename:join(DstDir, "analysis")++".html",
     file:write_file(FileName, HTML).
 
 maximum_average(RawData) ->
@@ -63,16 +67,45 @@ capitalize([C|R]) when (C>=$a) , (C=<$z) ->
 capitalize(L) ->
     L.
 
+generate_divs(DivIds) ->
+    [ "<div id=\"chartContainer"++i2l(Id)++"\" style=\"height: 300px; width: 100%;\"></div>"
+      || Id <- DivIds].
 
+generate_table(Divs) ->
+    "<table style=\"width:100%\">"++table_with_2_elements_per_row(Divs)++
+        "</table>".
 
-generate_html(Header, MaxY, DataPoints) ->
+table_with_2_elements_per_row([]) -> "";
+table_with_2_elements_per_row([E1,E2|R]) ->
+    "<tr>
+      <td>"++E1++"</td>
+      <td>"++E2++"</td>
+    </tr>"++
+    table_with_2_elements_per_row(R);
+table_with_2_elements_per_row([E1]) ->
+    "<tr>
+      <td>"++E1++"</td>
+      <td></td>
+    </tr>".
+
+generate_html(Table,JSs) ->
 "<!DOCTYPE HTML>
 <html>
 
 <head>  
   <script type=\"text/javascript\">
-  window.onload = function () {
-    var chart = new CanvasJS.Chart(\"chartContainer\",
+  window.onload = function () {"
+++string:join(JSs,"\n")++"
+}
+</script>
+<script type=\"text/javascript\" src=\"http://canvasjs.com/assets/script/canvasjs.min.js\"></script>
+</head>
+<body>"++Table++
+"</body>
+</html>".
+
+generate_chart_js(DivId, Header, MaxY, DataPoints) ->
+  "var chart_"++Header++" = new CanvasJS.Chart(\"chartContainer"++i2l(DivId)++"\",
     {
       zoomEnabled: true,
       animationEnabled: true,
@@ -103,19 +136,8 @@ generate_html(Header, MaxY, DataPoints) ->
         ["
 ++string:join(DataPoints,",\n")++" 
         ]
-      }
+       }
       ]
     });
-
-chart.render();
-}
-</script>
-<script type=\"text/javascript\" src=\"http://canvasjs.com/assets/script/canvasjs.min.js\"></script>
-</head>
-<body>
-  <div id=\"chartContainer\" style=\"height: 300px; width: 100%;\">
-  </div>
-</body>
-
-</html>".
-
+   chart_"++Header++".render();
+".
