@@ -73,7 +73,7 @@ file(F, Opts) ->
     file(F, Opts, []).
 file(F, Opts, IncFile) ->
     IncPath = get_compile_include_path(IncFile),
-    {ok,Mod,Bin} = compile:file(F,[binary,verbose, debug_info] ++ IncPath),
+    {ok,Mod,Bin} = compile:file(F,[binary,verbose, debug_info, return_errors] ++ IncPath),
     {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
         beam_lib:chunks(Bin,[abstract_code]),
     #tree{type = file,
