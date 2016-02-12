@@ -2,12 +2,18 @@
 -include("ess.hrl").
 -export([generate/1]).
 
--export([t/0]).
+-export([t/0, gen_res/0]).
 
-t() ->
+
+gen_res() ->
     Res = [ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/reg/src",[], "sbg_inc.conf"),
            ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/oab/src/",[], "sbg_inc.conf"),
            ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/b2b/src/",[], "sbg_inc.conf")],
+    file:write_file("./res.data", term_to_binary(Res)).
+
+t() ->
+    {ok,Bin}  = file:read_file("./res.data"),
+    Res = binary_to_term(Bin),
     generate(Res).
 
 generate(AnalysisResults) ->
@@ -21,13 +27,17 @@ generate_for_one_tag(AnalysisResults, Tag) ->
                   #tree{name = Dir, value = Value} <- AnalysisResults ],
     
     DataPoints =  generate_datapoints(RawData),
+    MaxY = 5+maximum_average(RawData),
     
     Header = capitalize(a2l(Tag)),
-    HTML = generate_html(Header, DataPoints),
+    HTML = generate_html(Header, MaxY, DataPoints),
     
     DstDir = "/home/etxpell/dev_patches",
     FileName = filename:join(DstDir, Tag)++".html",
     file:write_file(FileName, HTML).
+
+maximum_average(RawData) ->
+    lists:max([ element(3,element(2,D)) || D <- RawData ]).
 
 generate_datapoints(RawData) ->
     lists:map(fun generate_datapoint/1, RawData).
@@ -45,14 +55,17 @@ gv(K,L) ->
 a2l(X) when is_list(X) -> X;
 a2l(X) when is_atom(X) -> atom_to_list(X).
 
+i2l(X) when is_list(X) -> X;
+i2l(X) when is_integer(X) -> integer_to_list(X).
+
 capitalize([C|R]) when (C>=$a) , (C=<$z) ->
-    [C+32 | R];
+    [C-32 | R];
 capitalize(L) ->
     L.
 
 
 
-generate_html(Header, DataPoints) ->
+generate_html(Header, MaxY, DataPoints) ->
 "<!DOCTYPE HTML>
 <html>
 
@@ -78,7 +91,7 @@ generate_html(Header, DataPoints) ->
         tickColor: \"lightgrey\",
         lineThickness: 0,
         valueFormatString:\"#.\",
-        maximum: 10,
+        maximum: "++i2l(MaxY)++",
         interval: 1        
       },
 
