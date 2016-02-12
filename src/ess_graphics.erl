@@ -33,7 +33,8 @@ generate(AnalysisResults) ->
           end,
           lists:zip(Tags,DivIds)),
     Divs = generate_divs(DivIds),
-    HTML = generate_html(Divs,JSCharts),
+    Table = generate_table(Divs),
+    HTML = generate_html(Table, JSCharts),
     
     DstDir = "/home/etxpell/dev_patches",
     FileName = filename:join(DstDir, "analysis")++".html",
@@ -70,7 +71,24 @@ generate_divs(DivIds) ->
     [ "<div id=\"chartContainer"++i2l(Id)++"\" style=\"height: 300px; width: 100%;\"></div>"
       || Id <- DivIds].
 
-generate_html(Divs,JSs) ->
+generate_table(Divs) ->
+    "<table style=\"width:100%\">"++table_with_2_elements_per_row(Divs)++
+        "</table>".
+
+table_with_2_elements_per_row([]) -> "";
+table_with_2_elements_per_row([E1,E2|R]) ->
+    "<tr>
+      <td>"++E1++"</td>
+      <td>"++E2++"</td>
+    </tr>"++
+    table_with_2_elements_per_row(R);
+table_with_2_elements_per_row([E1]) ->
+    "<tr>
+      <td>"++E1++"</td>
+      <td></td>
+    </tr>".
+
+generate_html(Table,JSs) ->
 "<!DOCTYPE HTML>
 <html>
 
@@ -82,9 +100,8 @@ generate_html(Divs,JSs) ->
 </script>
 <script type=\"text/javascript\" src=\"http://canvasjs.com/assets/script/canvasjs.min.js\"></script>
 </head>
-<body>
-"++string:join(Divs,"\n")++"
-</body>
+<body>"++Table++
+"</body>
 </html>".
 
 generate_chart_js(DivId, Header, MaxY, DataPoints) ->
