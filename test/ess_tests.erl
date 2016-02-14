@@ -3,7 +3,7 @@
 -include("../src/ess.hrl").
 -compile(export_all).
 
-lines_per_function_test_() ->
+lines_per_function_test_X() ->
     [ {"receive",
        fun() ->
                AST = str2ast("f() -> receive _ -> 3+3, A=g(), 25 end."),
@@ -30,7 +30,7 @@ lines_per_function_test_() ->
        end}
     ].
 
-expressions_per_line_numbers_test_() ->
+expressions_per_line_numbers_test_X() ->
     [ {"simple",
        fun() ->
                AST = str2ast("f() -> 25."),
@@ -70,7 +70,7 @@ expressions_per_line_numbers_test_() ->
         end}
      ].
 
-structural_complexity_test_() ->
+structural_complexity_test_X() ->
     [ make_test_case(X) || X <- structural_complexity_test_cases() ].
 
 make_test_case({Label, Input, ExpectedResult, Function}) ->
@@ -117,7 +117,7 @@ structural_complexity_test_cases() ->
      {"try","f() ->try a() catch O -> done end.",3,structural_complexity}
     ].
 
-analyze_function_test() ->
+analyze_function_testX() ->
     AST = str2ast("f() -> 1."),
     Res = ess:analyze_function(AST),
     Expected = lists:sort([{arity, 0},
@@ -129,7 +129,7 @@ analyze_function_test() ->
                           ]),
     ?assertEqual(Expected, Res).
 
-analyze_function_with_several_clauses_test() ->
+analyze_function_with_several_clauses_testX() ->
     AST = str2ast("f(1) -> 1;\n"
                   "f(2) -> 2."),
     Res = ess:analyze_function(AST),
@@ -142,7 +142,7 @@ analyze_function_with_several_clauses_test() ->
                           ]),
     ?assertEqual(Expected, Res).
 
-analyze_big_function_with_three_clauses_test() ->
+analyze_big_function_with_three_clauses_testX() ->
     AST = str2ast("f(OldA,B,C,D) -> \n"
                   "   A = g(OldA),\n"
                   "   NewA = f(A,B),\n"
@@ -168,7 +168,7 @@ analyze_big_function_with_three_clauses_test() ->
                            ]),
     ?assertEqual(Expected, Res).
 
-analyze_function_with_recieve_after_test() ->
+analyze_function_with_recieve_after_testX() ->
     AST = str2ast("f(OldA) -> \n"
                   "   A = g(OldA),\n"
                   "   receive\n" 
@@ -189,7 +189,7 @@ analyze_function_with_recieve_after_test() ->
                            ]),
     ?assertEqual(Expected, Res).
 
-analyze_simple_module_test() ->
+analyze_simple_module_testX() ->
     Name = "../test/test/file_read_test.erl",
     Res = ess:file(Name),
     Expected = #tree{type = file,
@@ -203,7 +203,7 @@ analyze_simple_module_test() ->
                                         ])},
     ?assertEqual(Expected, Res).
 
-analyze_less_simple_module_test() ->
+analyze_less_simple_module_testX() ->
     Name = "../test/test/file_read_test_2.erl",
     Res = ess:file(Name),
     Expected = #tree{type = file,
@@ -218,7 +218,7 @@ analyze_less_simple_module_test() ->
     ?assertEqual(Expected, Res).
     
 
-clauses_per_function_test_() ->
+clauses_per_function_test_X() ->
     [{"one",
       fun() ->
               AST = str2ast("f() -> 1."),
@@ -263,42 +263,42 @@ str2ast(Str) ->
     {ok,FunForms} = erl_parse:parse_form(FunTkns),
     FunForms.
 
-no_variable_stepping_test() ->
+no_variable_stepping_testX() ->
     AST = str2ast("f() -> A = 0."),
     Res = ess:variable_steppings_per_function(AST),
     ?assertEqual(0,Res).
 
-one_variable_stepping_test() ->
+one_variable_stepping_testX() ->
     AST = str2ast("f() -> A = 0, A1 = f(A), A1."),
     Res = ess:variable_steppings_per_function(AST),
     ?assertEqual(1,Res).
     
-case_branch_variable_stepping_test() ->
+case_branch_variable_stepping_testX() ->
     AST = str2ast("f() -> A=1, case A of NewA -> NewA end."),
     Res = ess:variable_steppings_per_function(AST),
     ?assertEqual(1,Res).
 
-case_clause_variable_stepping_test() ->
+case_clause_variable_stepping_testX() ->
     AST = str2ast("f() -> A=1, case A of 2 -> A1 = g(2) end."),
     Res = ess:variable_steppings_per_function(AST),
     ?assertEqual(1,Res).
 
-case_clause_and_branch_variable_stepping_test() ->
+case_clause_and_branch_variable_stepping_testX() ->
     AST = str2ast("f() -> A=1, case A of NewA -> NewA2 = g(NewA) end."),
     Res = ess:variable_steppings_per_function(AST),
     ?assertEqual(2,Res).
 
-function_argument_variable_stepping_test() ->
+function_argument_variable_stepping_testX() ->
     AST = str2ast("f(A,B) -> NewA=1."),
     Res = ess:variable_steppings_per_function(AST),
     ?assertEqual(1,Res).
 
-function_record_argument_variable_stepping_test() ->
+function_record_argument_variable_stepping_testX() ->
     AST = str2ast("f(#rec{a=A},B) -> NewA=1."),
     Res = ess:variable_steppings_per_function(AST),
     ?assertEqual(1,Res).
 
-stepping_test_() ->
+stepping_test_X() ->
     [{"no stepping", 
       fun() ->
               Input = ["A", "B"],
@@ -337,7 +337,53 @@ stepping_test_() ->
       end
      }].
 
-get_compile_include_path_test() ->
+aggregate_values_base_test() ->
+    V1 = 3,
+    V2 = 7,
+    Res = ess:aggregate_values([V1, V2]),
+    Expected = #agg{max=7, min=3, avg=5, sum=10, n=2},
+    ?assertEqual(Expected, Res).
+
+aggregate_values_base_and_agg_test() ->
+    V1 = 3,
+    V2 = #agg{max=9, min=2, sum=13, n=3},
+    Res = ess:aggregate_values([V1, V2]),
+    Expected = #agg{max=9, min=2, avg=4, sum=16, n=4},
+    ?assertEqual(Expected, Res).
+
+aggregate_values_agg_and_agg_test() ->
+    V1 = #agg{max=2, min=1, sum=3, n=1},
+    V2 = #agg{max=9, min=2, sum=13, n=3},
+    Res = ess:aggregate_values([V1, V2]),
+    Expected = #agg{max=9, min=1, avg=4, sum=16, n=4},
+    ?assertEqual(Expected, Res).
+
+aggregate_values_base_sets_min_test() ->
+    V1 = 1,
+    V2 = #agg{max=9, min=2, sum=15, n=3},
+    Res = ess:aggregate_values([V1, V2]),
+    Expected = #agg{max=9, min=1, avg=4, sum=16, n=4},
+    ?assertEqual(Expected, Res).
+    
+aggregate_values_base_sets_max_test() ->
+    V1 = 11,
+    V2 = #agg{max=9, min=2, sum=5, n=3},
+    Res = ess:aggregate_values([V1, V2]),
+    Expected = #agg{max=11, min=2, avg=4, sum=16, n=4},
+    ?assertEqual(Expected, Res).
+
+aggregate_values_three_agg_test() ->
+    V1 = #agg{max=11, min=1, sum=12, n=2},
+    V2 = #agg{max=9, min=2, sum=17, n=3},
+    V3 = #agg{max=1, min=1, sum=7, n=7},
+    Res = ess:aggregate_values([V1, V2, V3]),
+    Expected = #agg{max=11, min=1, avg=3, sum=36, n=12},
+    ?assertEqual(Expected, Res).
+
+    
+
+
+get_compile_include_path_testX() ->
     Res = ess:get_compile_include_path("../test/sbg_inc.conf"),
     L = [{i, "/local/scratch/ejunyin/proj/sgc/src/sgc/reg/include"},
          {i, "/local/scratch/ejunyin/proj/sgc/src/syf/ccpc/include/"},
@@ -345,12 +391,12 @@ get_compile_include_path_test() ->
          {i, "/local/scratch/ejunyin/proj/sgc/src/syf/sip/include/"}],
     ?assertEqual(L, Res).   
 
-get_all_files_test() ->
+get_all_files_testX() ->
     Res = ess:get_all_files("../src/"),
     L = ["../src/ess.erl"],
     ?assertEqual(L, Res).
 
-analyze_directory_test() ->
+analyze_directory_testX() ->
     Res = ess:dir("../test/test/test_dir/"),
     AggregateValues = lists:sort([{arity,{2,1,2}},
                                   {clauses,{1,1,1}},
@@ -383,7 +429,7 @@ analyze_directory_test() ->
                      children = [ValuesForA, ValuesForB]},
     ?assertMatch(Expected, Res).
 
-analyze_deep_directory_test() ->
+analyze_deep_directory_testX() ->
     Dir = "../test/test/test_dir",
     Res = ess:dir(Dir),
     AggregateValues = lists:sort([{arity,{2,1,2}},
@@ -399,7 +445,7 @@ analyze_deep_directory_test() ->
                  Res).
 
 
-recurse_deep_directory_test() ->
+recurse_deep_directory_testX() ->
     Res = ess:recursive_dir(["../test/test/"]),
     Expected = [{"../test/test/",
                  ["../test/test/file_read_test_2.erl",

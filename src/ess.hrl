@@ -3,3 +3,6 @@
               value :: [],
               children = [] :: []
              }).
+
+-record(agg, {max, min, avg, sum, n}).
+

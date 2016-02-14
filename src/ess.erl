@@ -104,21 +104,42 @@ aggregate2(L) ->
 aggregate_values(L) ->
     Max = lists:max(get_max_values(L)),
     Min = lists:min(get_min_values(L)),
-    Mean = lists_mean(get_mean_values(L)),
-    {Max, Min, Mean}.
+    Sum = get_sum_values(L),
+    N = count_number_of_items(L),
+    Mean = round(Sum / N),
+    #agg{max=Max, min=Min, avg=Mean, sum=Sum, n=N}.
 
 get_max_values(L) -> [value_max(X) || X <- L].
 get_min_values(L) -> [value_min(X) || X <- L].
 get_mean_values(L) -> [value_mean(X) || X <- L].
 
-value_max({M, _, _}) -> M;
+value_max(#agg{max=M}) -> M;
 value_max(M) when is_integer(M) -> M.
 
-value_min({_, M, _}) -> M;
+value_min(#agg{min=M}) -> M;
 value_min(M) when is_integer(M) -> M.
 
 value_mean({_, _, M}) -> M;
 value_mean(M) when is_integer(M) -> M.
+
+get_sum_values(L) ->
+    lists:sum([ get_sum_value(X) || X <- L ]).
+
+get_sum_value(#agg{sum=Sum}) ->
+    Sum;
+get_sum_value(X) when is_integer(X) ->
+    X.
+
+
+count_number_of_items(L) ->
+    lists:sum([ item_count(X) || X <- L ]).
+
+item_count(#agg{n=N}) ->
+    N;
+item_count(X) when is_integer(X) ->
+    1.
+
+
 
 lists_mean(L) ->
     avg_sum(L).
