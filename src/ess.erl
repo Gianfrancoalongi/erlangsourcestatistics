@@ -161,7 +161,10 @@ usort(L) -> lists:usort(L).
 expressions_per_function_line({function,_,_,_,Clauses}) -> 
     LNs = [ get_toplevel_linenumbers(C) || C <- Clauses],
     ROSL = repeats_on_same_line(lists:flatten(LNs)),
-    {lists:max(ROSL), lists:min(ROSL), avg_sum(ROSL)}.
+%%    {lists:max(ROSL), lists:min(ROSL), avg_sum(ROSL)}.
+    #agg{max=lists:max(ROSL), min=lists:min(ROSL), sum=lists:sum(ROSL),
+	 n=length(ROSL)}.
+
 
 avg_sum(L) ->
     round(lists:sum(L) / length(L)).
