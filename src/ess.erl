@@ -57,14 +57,6 @@ recursive_dir([Dir|R]) ->
 is_erlang_source_file(F) ->
     filename:extension(F) == ".erl".
 
-take_first_from_all_lists(Input) ->
-    take_first_from_all_lists(Input,[],[]).
-
-take_first_from_all_lists([[]|_],Firsts,Rests) ->
-    {Firsts, Rests};
-take_first_from_all_lists([[First|Rest]|T],Firsts,Rests) ->
-    take_first_from_all_lists(T,[First|Firsts],[Rest|Rests]).
-    
 get_all_files(Folder) ->
     filelib:fold_files(Folder, ".*.erl$", true, 
                        fun(File, AccIn) -> [File | AccIn] end, 

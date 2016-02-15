@@ -26,7 +26,7 @@ lines_per_function_test_() ->
        fun() ->
                AST = str2ast(large_func()),
                Res = ess:lines_per_function(AST),
-               ?assertEqual(17, Res)
+               ?assertEqual(21, Res)
        end}
     ].
 
@@ -120,7 +120,8 @@ structural_complexity_test_cases() ->
      {"record_index","f(#regC.eri, O) ->ok.",1, structural_complexity},
      {"catch","f()-> case catch a:b(C) of ok -> 1 end.",3,structural_complexity},
      {"fun","f(fun(C) -> a(C) end) -> ok.",2,structural_complexity},
-     {"try","f() ->try a() catch O -> done end.",3,structural_complexity}
+     {"try","f() ->try a() catch O -> done end.",3,structural_complexity},
+     {"block","f() -> begin A=5, A+1 end.",3,structural_complexity}
     ].
 
 analyze_function_test() ->
@@ -252,15 +253,22 @@ large_func() ->
             case N+1 of
                 3 ->
                     what_about,
-                    this_line,
+                    c#c.f,
                     m:f(\"one\");
                 1 ->
-                    ok
+                    -2
             end,
-            something;
+            #c{a=hi} = something;
         _ ->
             ignore,
-            m:f(),
+            try 
+                m:f(),
+                local_f()
+            catch _:_ -> 
+                failed
+            after
+                cleanup
+            end,
             b()
     end;
 a(X) when is_list(X) ->
