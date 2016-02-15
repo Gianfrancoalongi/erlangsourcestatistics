@@ -4,5 +4,5 @@
               children = [] :: []
              }).
 
--record(agg, {max, min, avg, sum, n}).
+-record(val, {max, min, avg, sum, n}).
 
