@@ -42,7 +42,8 @@ recursive_dir([]) ->
 recursive_dir([Dir|R]) ->
     {ok, Files} = file:list_dir(Dir),    
     FullNames = [ filename:join(Dir,F) || F <- Files ],
-    DirFiles = [ F || F <- FullNames, not filelib:is_dir(F), is_erlang_source_file(F) ],
+    DirFiles = [ F || F <- FullNames, not filelib:is_dir(F), 
+                      is_erlang_source_file(F) ],
     Dirs = [ F || F <- FullNames, filelib:is_dir(F) ],
     RecursiveStuff = recursive_dir(Dirs),
     Res = case {DirFiles, RecursiveStuff} of
@@ -56,16 +57,10 @@ recursive_dir([Dir|R]) ->
 is_erlang_source_file(F) ->
     filename:extension(F) == ".erl".
 
-take_first_from_all_lists(Input) ->
-    take_first_from_all_lists(Input,[],[]).
-
-take_first_from_all_lists([[]|_],Firsts,Rests) ->
-    {Firsts, Rests};
-take_first_from_all_lists([[First|Rest]|T],Firsts,Rests) ->
-    take_first_from_all_lists(T,[First|Firsts],[Rest|Rests]).
-    
 get_all_files(Folder) ->
-    filelib:fold_files(Folder, ".*.erl$", true, fun(File, AccIn) -> [File | AccIn] end, []).
+    filelib:fold_files(Folder, ".*.erl$", true, 
+                       fun(File, AccIn) -> [File | AccIn] end, 
+                       []).
 
 file(F) ->
     file(F, [], []).
@@ -73,7 +68,8 @@ file(F, Opts) ->
     file(F, Opts, []).
 file(F, Opts, IncFile) ->
     IncPath = get_compile_include_path(IncFile),
-    {ok,Mod,Bin} = compile:file(F,[binary,verbose, debug_info, return_errors] ++ IncPath),
+    {ok,Mod,Bin} = compile:file(F,[binary,verbose, debug_info, return_errors] 
+                                ++ IncPath),
     {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
         beam_lib:chunks(Bin,[abstract_code]),
     #tree{type = file,
@@ -81,7 +77,7 @@ file(F, Opts, IncFile) ->
           value = analyse(AST, Opts)}.
 
 analyse(AST, _Opts) -> 
-    Fs = [analyze_function(F) || F <- AST, is_ast_function(F)],
+    Fs = [ analyze_function(F) || F <- AST, is_ast_function(F) ],
     aggregate(Fs).
 
 aggregate_trees(Trees) ->
@@ -96,7 +92,8 @@ aggregate(Values) ->
 group_on_tag(Fs) ->
     Keys = sort(proplists:get_keys(hd(Fs))),
     All_results = lists:flatten(Fs),
-    aggregate2([ {Key, proplists:get_all_values(Key,All_results)} || Key <- Keys ]).
+    aggregate2([ {Key, proplists:get_all_values(Key,All_results)} || 
+                   Key <- Keys ]).
 
 aggregate2(L) ->
     [ {Key,aggregate_values(Values)} || {Key,Values} <- L].
@@ -104,24 +101,30 @@ aggregate2(L) ->
 aggregate_values(L) ->
     Max = lists:max(get_max_values(L)),
     Min = lists:min(get_min_values(L)),
-    Mean = lists_mean(get_mean_values(L)),
-    {Max, Min, Mean}.
+    Sum = sum(get_sum_values(L)),
+    N = count_number_of_items(L),
+    Mean = round(Sum / N),
+    #val{max=Max, min=Min, avg=Mean, sum=Sum, n=N}.
 
 get_max_values(L) -> [value_max(X) || X <- L].
 get_min_values(L) -> [value_min(X) || X <- L].
-get_mean_values(L) -> [value_mean(X) || X <- L].
+get_sum_values(L) -> [value_sum(X) || X <- L].
 
-value_max({M, _, _}) -> M;
+value_max(#val{max=M}) -> M;
 value_max(M) when is_integer(M) -> M.
 
-value_min({_, M, _}) -> M;
+value_min(#val{min=M}) -> M;
 value_min(M) when is_integer(M) -> M.
 
-value_mean({_, _, M}) -> M;
-value_mean(M) when is_integer(M) -> M.
+value_sum(#val{sum=Sum}) -> Sum;
+value_sum(X) when is_integer(X) -> X.
 
-lists_mean(L) ->
-    avg_sum(L).
+
+count_number_of_items(L) ->
+    sum([ item_count(X) || X <- L ]).
+
+item_count(#val{n=N}) -> N;
+item_count(X) when is_integer(X) -> 1.
 
 
 analyze_function(AST) ->
@@ -133,17 +136,12 @@ analyze_function(AST) ->
           {variable_steppings, variable_steppings_per_function(AST)}
          ]).
 
-sort(L) -> lists:sort(L).
-
-usort(L) -> lists:usort(L).
-    
 expressions_per_function_line({function,_,_,_,Clauses}) -> 
     LNs = [ get_toplevel_linenumbers(C) || C <- Clauses],
     ROSL = repeats_on_same_line(lists:flatten(LNs)),
-    {lists:max(ROSL), lists:min(ROSL), avg_sum(ROSL)}.
+    #val{max=lists:max(ROSL), min=lists:min(ROSL), sum=sum(ROSL),
+	 n=length(ROSL)}.
 
-avg_sum(L) ->
-    round(lists:sum(L) / length(L)).
 
 lines_per_function(AST) ->
     LNs = get_linenumbers(AST),
@@ -169,8 +167,6 @@ variable_steppings_in_body({clause,_,Arguments,_,Body}) ->
     Body_Variables = extract_variables(Body),
     Variables = usort(Arg_Variables++Body_Variables),
     stepping(Variables).
-
-sum(X) -> lists:sum(X).
 
 extract_variables([{var,_,V}|R]) ->
     [atom_to_list(V) | extract_variables(R)];
@@ -238,7 +234,7 @@ is_ascii_integer(_) -> false.
 
 
 structural_complexity(L) when is_list(L) ->
-    lists:sum([ structural_complexity(X) || X <- L ]);
+    sum([ structural_complexity(X) || X <- L ]);
 structural_complexity({function, _, _, _, Clauses}) ->
     lists:max([ structural_complexity(X) || X <- Clauses ]);
 structural_complexity({clause, _, Match, Guards, Exprs}) ->
@@ -363,4 +359,12 @@ get_linenumbers_body([{Marker,LN,_,_,_}|T]) when is_atom(Marker) ->
 
 
 
+%%-----------------------
+%% Utilities
+
+sort(L) -> lists:sort(L).
+
+usort(L) -> lists:usort(L).
+    
+sum(X) -> lists:sum(X).
 

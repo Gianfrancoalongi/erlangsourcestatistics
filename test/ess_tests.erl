@@ -26,7 +26,7 @@ lines_per_function_test_() ->
        fun() ->
                AST = str2ast(large_func()),
                Res = ess:lines_per_function(AST),
-               ?assertEqual(17, Res)
+               ?assertEqual(21, Res)
        end}
     ].
 
@@ -35,39 +35,45 @@ expressions_per_line_numbers_test_() ->
        fun() ->
                AST = str2ast("f() -> 25."),
                Res = ess:expressions_per_function_line(AST),
-               ?assertEqual({1,1,1}, Res)
+	       Expected = #val{max=1, min=1, sum=1, n=1},
+               ?assertEqual(Expected, Res)
        end},
       {"2",
       fun() ->
                AST = str2ast("f() -> 25, 24,\n21."),
                Res = ess:expressions_per_function_line(AST),
-               ?assertEqual({2,1,2}, Res)              
+	       Expected = #val{max=2, min=1, sum=3, n=2},
+               ?assertEqual(Expected, Res)
        end},
       {"receive",
        fun() ->
                AST = str2ast("f() -> receive hej -> 2+33 end."),
                Res = ess:expressions_per_function_line(AST),
-               ?assertEqual({1,1,1}, Res) 
+	       Expected = #val{max=1, min=1, sum=1, n=1},
+               ?assertEqual(Expected, Res)
        end},
       {"receive with after",
        fun() ->
                AST = str2ast("f() -> receive hej -> 2+33 "
                              "after 120 -> not_ok end."),
                Res = ess:expressions_per_function_line(AST),
-               ?assertEqual({1,1,1}, Res) 
+	       Expected = #val{max=1, min=1, sum=1, n=1},
+               ?assertEqual(Expected, Res)
        end},
       {"match",
        fun() ->
                AST = str2ast("f() -> A = 1."),
                Res = ess:expressions_per_function_line(AST),
-               ?assertEqual({1,1,1}, Res) 
+ 	       Expected = #val{max=1, min=1, sum=1, n=1},
+               ?assertEqual(Expected, Res)
        end},
        {"try",
         fun() ->
                AST = str2ast("f() -> try a() catch O ->done end."),
                Res = ess:expressions_per_function_line(AST),
-               ?assertEqual({1,1,1}, Res) 
-        end}
+	       Expected = #val{max=1, min=1, sum=1, n=1},
+               ?assertEqual(Expected, Res)
+         end}
      ].
 
 structural_complexity_test_() ->
@@ -114,7 +120,8 @@ structural_complexity_test_cases() ->
      {"record_index","f(#regC.eri, O) ->ok.",1, structural_complexity},
      {"catch","f()-> case catch a:b(C) of ok -> 1 end.",3,structural_complexity},
      {"fun","f(fun(C) -> a(C) end) -> ok.",2,structural_complexity},
-     {"try","f() ->try a() catch O -> done end.",3,structural_complexity}
+     {"try","f() ->try a() catch O -> done end.",3,structural_complexity},
+     {"block","f() -> begin A=5, A+1 end.",3,structural_complexity}
     ].
 
 analyze_function_test() ->
@@ -124,8 +131,9 @@ analyze_function_test() ->
                            {clauses, 1},
                            {complexity, 0},
                            {variable_steppings, 0},
-                           {expressions_per_line, {1,1,1}},
-                           {expressions_per_function, 1}
+                           {expressions_per_line, #val{max=1, min=1, 
+						       sum=1, n=1}},
+			   {expressions_per_function, 1}
                           ]),
     ?assertEqual(Expected, Res).
 
@@ -137,7 +145,8 @@ analyze_function_with_several_clauses_test() ->
                            {clauses, 2},
                            {complexity, 0},
                            {variable_steppings, 0},
-                           {expressions_per_line, {1,1,1}},
+                           {expressions_per_line, #val{max=1, min=1, 
+						       sum=2, n=2}},
                            {expressions_per_function, 2}
                           ]),
     ?assertEqual(Expected, Res).
@@ -163,7 +172,8 @@ analyze_big_function_with_three_clauses_test() ->
                            {clauses, 3},
                            {complexity, 7},
                            {variable_steppings, 5},
-                           {expressions_per_line, {1,1,1}},
+                           {expressions_per_line, #val{max=1, min=1, 
+						       sum=7, n=7}},
                            {expressions_per_function, 11}
                            ]),
     ?assertEqual(Expected, Res).
@@ -184,9 +194,10 @@ analyze_function_with_recieve_after_test() ->
                            {clauses, 2},
                            {complexity, 4},
                            {variable_steppings, 1},
-                           {expressions_per_line, {1,1,1}},
+                           {expressions_per_line, #val{max=1, min=1, 
+						       sum=3, n=3}},
                            {expressions_per_function, 6}
-                           ]),
+			  ]),
     ?assertEqual(Expected, Res).
 
 analyze_simple_module_test() ->
@@ -194,12 +205,12 @@ analyze_simple_module_test() ->
     Res = ess:file(Name),
     Expected = #tree{type = file,
                      name = Name,
-                     value = lists:sort([{arity, {0,0,0}},
-                                         {clauses, {1,1,1}},
-                                         {complexity, {0,0,0}},
-                                         {variable_steppings, {0,0,0}},
-                                         {expressions_per_line, {1,1,1}},
-                                         {expressions_per_function, {2,1,2}}
+                     value = lists:sort([{arity, val(0,0,0,2)},
+                                         {clauses, val(1,1,2,2)},
+                                         {complexity, val(0,0,0,2)},
+                                         {variable_steppings, val(0,0,0,2)},
+					 {expressions_per_line, val(1,1,3,3)},
+                                         {expressions_per_function, val(2,1,3,2)}
                                         ])},
     ?assertEqual(Expected, Res).
 
@@ -208,13 +219,14 @@ analyze_less_simple_module_test() ->
     Res = ess:file(Name),
     Expected = #tree{type = file,
                      name = Name,
-                     value = lists:sort([{arity, {4,1,3}},
-                                         {clauses, {3,1,2}},
-                                         {complexity, {12,0,4}},
-                                         {variable_steppings, {0,0,0}},
-                                         {expressions_per_line, {1,1,1}},
-                                         {expressions_per_function, {10,1,4}}
+                     value = lists:sort([{arity, val(4,1,10,4)},
+                                         {clauses, val(3,1,7,4)},
+                                         {complexity, val(12,0,17,4)},
+                                         {variable_steppings, val(0,0,0,4)},
+					 {expressions_per_line, val(1,1,7,7)},
+                                         {expressions_per_function, val(10,1,15,4)}
                                         ])},
+
     ?assertEqual(Expected, Res).
     
 
@@ -241,15 +253,22 @@ large_func() ->
             case N+1 of
                 3 ->
                     what_about,
-                    this_line,
+                    c#c.f,
                     m:f(\"one\");
                 1 ->
-                    ok
+                    -2
             end,
-            something;
+            #c{a=hi} = something;
         _ ->
             ignore,
-            m:f(),
+            try 
+                m:f(),
+                local_f()
+            catch _:_ -> 
+                failed
+            after
+                cleanup
+            end,
             b()
     end;
 a(X) when is_list(X) ->
@@ -337,6 +356,52 @@ stepping_test_() ->
       end
      }].
 
+aggregate_values_base_test() ->
+    V1 = 3,
+    V2 = 7,
+    Res = ess:aggregate_values([V1, V2]),
+    Expected = #val{max=7, min=3, avg=5, sum=10, n=2},
+    ?assertEqual(Expected, Res).
+
+aggregate_values_base_and_agg_test() ->
+    V1 = 3,
+    V2 = #val{max=9, min=2, sum=13, n=3},
+    Res = ess:aggregate_values([V1, V2]),
+    Expected = #val{max=9, min=2, avg=4, sum=16, n=4},
+    ?assertEqual(Expected, Res).
+
+aggregate_values_agg_and_agg_test() ->
+    V1 = #val{max=2, min=1, sum=3, n=1},
+    V2 = #val{max=9, min=2, sum=13, n=3},
+    Res = ess:aggregate_values([V1, V2]),
+    Expected = #val{max=9, min=1, avg=4, sum=16, n=4},
+    ?assertEqual(Expected, Res).
+
+aggregate_values_base_sets_min_test() ->
+    V1 = 1,
+    V2 = #val{max=9, min=2, sum=15, n=3},
+    Res = ess:aggregate_values([V1, V2]),
+    Expected = #val{max=9, min=1, avg=4, sum=16, n=4},
+    ?assertEqual(Expected, Res).
+    
+aggregate_values_base_sets_max_test() ->
+    V1 = 11,
+    V2 = #val{max=9, min=2, sum=5, n=3},
+    Res = ess:aggregate_values([V1, V2]),
+    Expected = #val{max=11, min=2, avg=4, sum=16, n=4},
+    ?assertEqual(Expected, Res).
+
+aggregate_values_three_agg_test() ->
+    V1 = #val{max=11, min=1, sum=12, n=2},
+    V2 = #val{max=9, min=2, sum=17, n=3},
+    V3 = #val{max=1, min=1, sum=7, n=7},
+    Res = ess:aggregate_values([V1, V2, V3]),
+    Expected = #val{max=11, min=1, avg=3, sum=36, n=12},
+    ?assertEqual(Expected, Res).
+
+    
+
+
 get_compile_include_path_test() ->
     Res = ess:get_compile_include_path("../test/sbg_inc.conf"),
     L = [{i, "/local/scratch/ejunyin/proj/sgc/src/sgc/reg/include"},
@@ -347,35 +412,36 @@ get_compile_include_path_test() ->
 
 get_all_files_test() ->
     Res = ess:get_all_files("../src/"),
-    L = ["../src/ess.erl"],
+    L = ["../src/ess.erl", "../src/ess_graphics.erl"],
     ?assertEqual(L, Res).
 
 analyze_directory_test() ->
     Res = ess:dir("../test/test/test_dir/"),
-    AggregateValues = lists:sort([{arity,{2,1,2}},
-                                  {clauses,{1,1,1}},
-                                  {complexity,{1,1,1}},
-                                  {expressions_per_function,{1,1,1}},
-                                  {expressions_per_line,{1,1,1}},
-                                  {variable_steppings,{1,0,1}}
+
+    AggregateValues = lists:sort([{arity,val(2,1,3,2)},
+                                  {clauses,val(1,1,2,2)},
+                                  {complexity,val(1,1,2,2)},
+                                  {expressions_per_function,val(1,1,2,2)},
+                                  {expressions_per_line,val(1,1,2,2)},
+				  {variable_steppings,val(1,0,1,2)}
                                  ]),
     ValuesForA = #tree{type = file,
                        name = "../test/test/test_dir/a.erl",
-                       value = [{arity,{1,1,1}},
-                                {clauses,{1,1,1}},
-                                {complexity,{1,1,1}},
-                                {expressions_per_function,{1,1,1}},
-                                {expressions_per_line,{1,1,1}},
-                                {variable_steppings,{0,0,0}}]},
+		       value = lists:sort([{arity,val(1,1,1,1)},
+					   {clauses,val(1,1,1,1)},
+					   {complexity,val(1,1,1,1)},
+					   {expressions_per_function,val(1,1,1,1)},
+					   {expressions_per_line,val(1,1,1,1)},
+					   {variable_steppings,val(0,0,0,1)}])},
     
     ValuesForB = #tree{type = file,
                        name = "../test/test/test_dir/b.erl",
-                       value = [{arity,{2,2,2}},
-                                {clauses,{1,1,1}},
-                                {complexity,{1,1,1}},
-                                {expressions_per_function,{1,1,1}},
-                                {expressions_per_line,{1,1,1}},
-                                {variable_steppings,{1,1,1}}]},
+		       value = lists:sort([{arity,val(2,2,2,1)},
+					   {clauses,val(1,1,1,1)},
+					   {complexity,val(1,1,1,1)},
+					   {expressions_per_function,val(1,1,1,1)},
+					   {expressions_per_line,val(1,1,1,1)},
+					   {variable_steppings,val(1,1,1,1)}])},
     
     Expected = #tree{type = dir,
                      name = "../test/test/test_dir/",
@@ -386,12 +452,14 @@ analyze_directory_test() ->
 analyze_deep_directory_test() ->
     Dir = "../test/test/test_dir",
     Res = ess:dir(Dir),
-    AggregateValues = lists:sort([{arity,{2,1,2}},
-                                  {clauses,{1,1,1}},
-                                  {complexity,{1,1,1}},
-                                  {expressions_per_function,{1,1,1}},
-                                  {expressions_per_line,{1,1,1}},
-                                  {variable_steppings,{1,0,1}}
+
+
+    AggregateValues = lists:sort([{arity,val(2,1,3,2)},
+                                  {clauses,val(1,1,2,2)},
+                                  {complexity,val(1,1,2,2)},
+                                  {expressions_per_function,val(1,1,2,2)},
+                                  {expressions_per_line,val(1,1,2,2)},
+				  {variable_steppings,val(1,0,1,2)}
                                  ]),
     ?assertMatch(#tree{type = dir,
                        name = Dir,
@@ -411,6 +479,8 @@ recurse_deep_directory_test() ->
                  ]}],
     ?assertMatch(Expected, Res).
 
+val(Max, Min, Sum, N) ->
+    #val{max=Max, min=Min, avg=round(Sum/N), sum=Sum, n=N}.
 
 debug(X) ->
     io:format(user,"~p~n",[X]).
