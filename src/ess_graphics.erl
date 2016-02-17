@@ -8,7 +8,8 @@
 gen_res() ->
     Res = [ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/reg/src",[], "sbg_inc.conf"),
            ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/oab/src/",[], "sbg_inc.conf"),
-           ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/b2b/src/",[], "sbg_inc.conf")],
+           ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/b2b/src/",[], "sbg_inc.conf"),
+           ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/sgn/src/",[], "sbg_inc.conf")],
     file:write_file("./res.data", term_to_binary(Res)).
 
 t() ->
@@ -140,7 +141,8 @@ generate_chart_js(DivId, Header, MaxY, DataPoints) ->
       },
       axisX: {
         title:\"Block\",
-        labelAngle: -30       
+        labelAngle: -30,
+        interval: 1
       },
       axisY:{
         title: \""++Header++"\",              
