@@ -455,17 +455,17 @@ analyze_directory_test() ->
     ?assertMatch(Expected, Res).
 
 analyze_deep_directory_test() ->
-    Dir = "../test/test/test_dir",
+    Dir = "../test/test",
     Res = ess:dir(Dir),
 
 
-    AggregateValues = lists:sort([{arity,val(2,1,3,2)},
-                                  {clauses,val(1,1,2,2)},
-                                  {complexity,val(1,1,2,2)},
-                                  {expressions_per_function,val(1,1,2,2)},
-                                  {expressions_per_line,val(1,1,2,2)},
-				  {variable_steppings,val(1,0,1,2)},
-                                  {warnings, val(0,0,0,2)}
+    AggregateValues = lists:sort([{arity,val(4,0,13,8)},
+                                  {clauses,val(3,1,11,8)},
+                                  {complexity,val(12,0,19,8)},
+                                  {expressions_per_function,val(10,1,20,8)},
+                                  {expressions_per_line,val(1,1,12,12)},
+				  {variable_steppings,val(1,0,1,8)},
+                                  {warnings, val(1,0,1,4)}
                                  ]),
     ?assertMatch(#tree{type = dir,
                        name = Dir,

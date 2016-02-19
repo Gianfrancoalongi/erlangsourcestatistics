@@ -8,8 +8,7 @@
 gen_res() ->
     Res = [ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/reg/src",[], "sbg_inc.conf"),
            ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/oab/src/",[], "sbg_inc.conf"),
-           ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/b2b/src/",[], "sbg_inc.conf"),
-           ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/sgn/src/",[], "sbg_inc.conf")],
+           ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/b2b/src/",[], "sbg_inc.conf")],
     file:write_file("./res.data", term_to_binary(Res)).
 
 t() ->
@@ -50,8 +49,7 @@ generate_js_charts(Categories, DivIds, DataSet) ->
       fun({Tag,DivId}) ->
               RawData = [ {get_good_name(Dir), gv(Tag, Value)} ||  
                             #tree{name = Dir, value = Value} <- DataSet ],
-              
-              DataPoints =  generate_datapoints(RawData),
+              DataPoints = generate_datapoints(RawData),
               MaxY = 5+maximum_average(RawData),
               
               Header = capitalize(a2l(Tag)),
@@ -65,13 +63,20 @@ get_analyis_categories(AnalysisResult)  ->
     [T || {T, _} <- AnalysisResult#tree.value ].
 
 maximum_average(RawData) ->
-    lists:max([ Value#val.avg || {_,Value} <- RawData ]).
+    lists:max([ avg_value(Value) || {_,Value} <- RawData ]).
+
+avg_value(#val{avg = Value}) ->
+    Value;
+avg_value(Value) ->
+    Value.
 
 generate_datapoints(RawData) ->
     lists:map(fun generate_datapoint/1, RawData).
 
 generate_datapoint({Block,#val{max=Max, avg=Avg}}) ->
-    io_lib:format("{ y: ~p, z: ~p, label:\"~s\"}", [Avg, Max, Block]).
+    io_lib:format("{ y: ~p, z: ~p, label:\"~s\"}", [Avg, Max, Block]);
+generate_datapoint({Label, Value}) ->
+    io_lib:format("{ y: ~p, z: ~p, label:\"~s\"}", [Value, Value, Label]).
 
 get_good_name(Dir) ->
     case lists:reverse(filename:split(Dir)) of
