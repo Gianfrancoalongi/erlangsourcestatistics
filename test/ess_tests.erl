@@ -414,8 +414,8 @@ get_compile_include_path_test() ->
 
 get_all_files_test() ->
     Res = ess:get_all_files("../src/"),
-    L = ["../src/ess.erl", "../src/ess_graphics.erl"],
-    ?assertEqual(L, Res).
+    L = lists:sort(["../src/ess.erl", "../src/ess_graphics.erl"]),
+    ?assertEqual(L, lists:sort(Res)).
 
 analyze_directory_test() ->
     Res = ess:dir("../test/test/test_dir/"),
@@ -476,14 +476,31 @@ analyze_deep_directory_test() ->
 recurse_deep_directory_test() ->
     Res = ess:recursive_dir(["../test/test/"]),
     Expected = [{"../test/test/",
-                 ["../test/test/file_read_test_2.erl",
-                  "../test/test/file_read_test.erl"],
-                 [{"../test/test/test_dir",
-                   ["../test/test/test_dir/a.erl",
-                    "../test/test/test_dir/b.erl"],
-                   []}
-                 ]}],
+		 ["../test/test/file_read_test_2.erl",
+		  "../test/test/file_read_test.erl"],
+		 [{"../test/test/test_dir",
+		   ["../test/test/test_dir/a.erl",
+		    "../test/test/test_dir/b.erl"],
+		   []}
+		 ]}],
     ?assertMatch(Expected, Res).
+
+comments_test() ->
+    Str = func_1(),
+    Res = ess:lexical_analyse_string(Str),
+    Expected = [{total_lines,4},
+		{lines_of_code,3},
+		{lines_of_comments,1},
+		{blank_lines,0}],
+    ?assertEqual(Expected, Res).
+
+func_1() ->    
+    "%% another comment 
+f() -> receive hej -> 2+33 
+       after 120 -> 
+	       not_ok end.".
+
+    
 
 val(Max, Min, Sum, N) ->
     #val{max=Max, min=Min, avg=round(Sum/N), sum=Sum, n=N}.
