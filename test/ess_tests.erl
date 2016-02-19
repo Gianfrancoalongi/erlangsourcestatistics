@@ -211,6 +211,10 @@ analyze_simple_module_test() ->
                                          {variable_steppings, val(0,0,0,2)},
 					 {expressions_per_line, val(1,1,3,3)},
                                          {expressions_per_function, val(2,1,3,2)},
+                                         {blank_lines, 2},
+                                         {lines_of_code,7},
+                                         {lines_of_comments, 0},
+                                         {total_lines, 9},
                                          {warnings, 1}
                                         ])},
     ?assertEqual(Expected, Res).
@@ -226,9 +230,12 @@ analyze_less_simple_module_test() ->
                                          {variable_steppings, val(0,0,0,4)},
 					 {expressions_per_line, val(1,1,7,7)},
                                          {expressions_per_function, val(10,1,15,4)},
+                                         {blank_lines, 3},
+                                         {lines_of_code,24},
+                                         {lines_of_comments, 0},
+                                         {total_lines, 27},
                                          {warnings, 0}
                                         ])},
-
     ?assertEqual(Expected, Res).
     
 
@@ -426,6 +433,10 @@ analyze_directory_test() ->
                                   {complexity,val(1,1,2,2)},
                                   {expressions_per_function,val(1,1,2,2)},
                                   {expressions_per_line,val(1,1,2,2)},
+                                  {blank_lines,val(2,1,3,2)},
+                                  {lines_of_code,val(4,4,8,2)},
+                                  {lines_of_comments,val(0,0,0,2)},
+                                  {total_lines,val(6,5,11,2)},
 				  {variable_steppings,val(1,0,1,2)}
                                  ]),
     ValuesForA = #tree{type = file,
@@ -436,6 +447,10 @@ analyze_directory_test() ->
 					   {complexity,val(1,1,1,1)},
 					   {expressions_per_function,val(1,1,1,1)},
 					   {expressions_per_line,val(1,1,1,1)},
+                                           {blank_lines, 1},
+                                           {lines_of_code,4},
+                                           {lines_of_comments, 0},
+                                           {total_lines, 5},
 					   {variable_steppings,val(0,0,0,1)}])},
     
     ValuesForB = #tree{type = file,
@@ -446,25 +461,32 @@ analyze_directory_test() ->
 					   {complexity,val(1,1,1,1)},
 					   {expressions_per_function,val(1,1,1,1)},
 					   {expressions_per_line,val(1,1,1,1)},
+                                           {blank_lines, 2},
+                                           {lines_of_code,4},
+                                           {lines_of_comments, 0},
+                                           {total_lines, 6},
 					   {variable_steppings,val(1,1,1,1)}])},
-    
+
     Expected = #tree{type = dir,
                      name = "../test/test/test_dir/",
                      value = AggregateValues,
                      children = [ValuesForA, ValuesForB]},
+
     ?assertMatch(Expected, Res).
 
 analyze_deep_directory_test() ->
     Dir = "../test/test",
     Res = ess:dir(Dir),
-
-
     AggregateValues = lists:sort([{arity,val(4,0,13,8)},
                                   {clauses,val(3,1,11,8)},
                                   {complexity,val(12,0,19,8)},
                                   {expressions_per_function,val(10,1,20,8)},
                                   {expressions_per_line,val(1,1,12,12)},
 				  {variable_steppings,val(1,0,1,8)},
+                                  {blank_lines,val(3,1,8,4)},
+                                  {lines_of_code,val(24,4,39,4)},
+                                  {lines_of_comments,val(0,0,0,4)},
+                                  {total_lines,val(27,5,47,4)},
                                   {warnings, val(1,0,1,4)}
                                  ]),
     ?assertMatch(#tree{type = dir,
@@ -494,12 +516,33 @@ comments_test() ->
 		{blank_lines,0}],
     ?assertEqual(Expected, Res).
 
+blank_lines_test() ->
+    Str = func_2(),
+    Res = ess:lexical_analyse_string(Str),
+    Expected = [{total_lines,5},
+		{lines_of_code,3},
+		{lines_of_comments,0},
+		{blank_lines,2}],
+    ?assertEqual(Expected, Res).
+
 func_1() ->    
     "%% another comment 
 f() -> receive hej -> 2+33 
        after 120 -> 
 	       not_ok end.".
 
+func_2() ->    
+    "f() -> receive hej -> 2+33 
+
+       after 120 -> 
+	       not_ok end.
+
+".
+
+tokenize_on_newline_test() ->
+    Str = "a\n\n",
+    Res = ess:divide_into_lines(Str),
+    ?assertEqual(["a",""], Res).
     
 
 val(Max, Min, Sum, N) ->
