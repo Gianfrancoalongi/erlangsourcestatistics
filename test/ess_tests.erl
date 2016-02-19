@@ -126,7 +126,7 @@ structural_complexity_test_cases() ->
 
 analyze_function_test() ->
     AST = str2ast("f() -> 1."),
-    Res = ess:analyze_function(AST),
+    Res = sort(ess:analyze_function(AST)),
     Expected = lists:sort([{arity, 0},
                            {clauses, 1},
                            {complexity, 0},
@@ -140,7 +140,7 @@ analyze_function_test() ->
 analyze_function_with_several_clauses_test() ->
     AST = str2ast("f(1) -> 1;\n"
                   "f(2) -> 2."),
-    Res = ess:analyze_function(AST),
+    Res = sort(ess:analyze_function(AST)),
     Expected = lists:sort([{arity, 1},
                            {clauses, 2},
                            {complexity, 0},
@@ -167,7 +167,7 @@ analyze_big_function_with_three_clauses_test() ->
                   "   g(B2,B1);\n"
                   "f(_,_,_,_) -> \n"
                   "   ok.\n"),
-    Res = ess:analyze_function(AST),
+    Res = sort(ess:analyze_function(AST)),
     Expected = lists:sort([{arity, 4},
                            {clauses, 3},
                            {complexity, 7},
@@ -189,7 +189,7 @@ analyze_function_with_recieve_after_test() ->
                   "   end;\n"
                   "f(_) -> \n"
                   "   g().\n"),
-    Res = ess:analyze_function(AST),
+    Res = sort(ess:analyze_function(AST)),
     Expected = lists:sort([{arity, 1},
                            {clauses, 2},
                            {complexity, 4},
@@ -210,7 +210,8 @@ analyze_simple_module_test() ->
                                          {complexity, val(0,0,0,2)},
                                          {variable_steppings, val(0,0,0,2)},
 					 {expressions_per_line, val(1,1,3,3)},
-                                         {expressions_per_function, val(2,1,3,2)}
+                                         {expressions_per_function, val(2,1,3,2)},
+                                         {warnings, 1}
                                         ])},
     ?assertEqual(Expected, Res).
 
@@ -224,7 +225,8 @@ analyze_less_simple_module_test() ->
                                          {complexity, val(12,0,17,4)},
                                          {variable_steppings, val(0,0,0,4)},
 					 {expressions_per_line, val(1,1,7,7)},
-                                         {expressions_per_function, val(10,1,15,4)}
+                                         {expressions_per_function, val(10,1,15,4)},
+                                         {warnings, 0}
                                         ])},
 
     ?assertEqual(Expected, Res).
@@ -418,7 +420,8 @@ get_all_files_test() ->
 analyze_directory_test() ->
     Res = ess:dir("../test/test/test_dir/"),
 
-    AggregateValues = lists:sort([{arity,val(2,1,3,2)},
+    AggregateValues = lists:sort([{warnings, val(0,0,0,2)},
+                                  {arity,val(2,1,3,2)},
                                   {clauses,val(1,1,2,2)},
                                   {complexity,val(1,1,2,2)},
                                   {expressions_per_function,val(1,1,2,2)},
@@ -427,7 +430,8 @@ analyze_directory_test() ->
                                  ]),
     ValuesForA = #tree{type = file,
                        name = "../test/test/test_dir/a.erl",
-		       value = lists:sort([{arity,val(1,1,1,1)},
+		       value = lists:sort([{warnings, 0},
+                                           {arity,val(1,1,1,1)},
 					   {clauses,val(1,1,1,1)},
 					   {complexity,val(1,1,1,1)},
 					   {expressions_per_function,val(1,1,1,1)},
@@ -436,7 +440,8 @@ analyze_directory_test() ->
     
     ValuesForB = #tree{type = file,
                        name = "../test/test/test_dir/b.erl",
-		       value = lists:sort([{arity,val(2,2,2,1)},
+		       value = lists:sort([{warnings, 0},
+                                           {arity,val(2,2,2,1)},
 					   {clauses,val(1,1,1,1)},
 					   {complexity,val(1,1,1,1)},
 					   {expressions_per_function,val(1,1,1,1)},
@@ -450,16 +455,17 @@ analyze_directory_test() ->
     ?assertMatch(Expected, Res).
 
 analyze_deep_directory_test() ->
-    Dir = "../test/test/test_dir",
+    Dir = "../test/test",
     Res = ess:dir(Dir),
 
 
-    AggregateValues = lists:sort([{arity,val(2,1,3,2)},
-                                  {clauses,val(1,1,2,2)},
-                                  {complexity,val(1,1,2,2)},
-                                  {expressions_per_function,val(1,1,2,2)},
-                                  {expressions_per_line,val(1,1,2,2)},
-				  {variable_steppings,val(1,0,1,2)}
+    AggregateValues = lists:sort([{arity,val(4,0,13,8)},
+                                  {clauses,val(3,1,11,8)},
+                                  {complexity,val(12,0,19,8)},
+                                  {expressions_per_function,val(10,1,20,8)},
+                                  {expressions_per_line,val(1,1,12,12)},
+				  {variable_steppings,val(1,0,1,8)},
+                                  {warnings, val(1,0,1,4)}
                                  ]),
     ?assertMatch(#tree{type = dir,
                        name = Dir,
@@ -482,5 +488,9 @@ recurse_deep_directory_test() ->
 val(Max, Min, Sum, N) ->
     #val{max=Max, min=Min, avg=round(Sum/N), sum=Sum, n=N}.
 
+sort(L) ->
+    lists:sort(L).
+
 debug(X) ->
     io:format(user,"~p~n",[X]).
+

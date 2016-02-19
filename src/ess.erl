@@ -27,7 +27,7 @@ traverse([{Dir,Files,SubDirs}|R], Fun) ->
     Aggregated = aggregate_trees(Stats),
     Res = #tree{type = dir,
                 name = Dir,
-                value = Aggregated,
+                value = sort(Aggregated),
                 children = Stats},
     [ Res | traverse(R, Fun) ];
 
@@ -68,13 +68,17 @@ file(F, Opts) ->
     file(F, Opts, []).
 file(F, Opts, IncFile) ->
     IncPath = get_compile_include_path(IncFile),
-    {ok,Mod,Bin} = compile:file(F,[binary,verbose, debug_info, return_errors] 
-                                ++ IncPath),
+    CompileOpts = get_compile_options(),
+    {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPath),
     {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
-        beam_lib:chunks(Bin,[abstract_code]),
+        beam_lib:chunks(Bin,[abstract_code]),    
     #tree{type = file,
           name = F,
-          value = analyse(AST, Opts)}.
+          value = sort([warning_metric(Warnings) | analyse(AST, Opts)])
+         }.
+
+get_compile_options() ->
+    [binary,verbose, debug_info, return].
 
 analyse(AST, _Opts) -> 
     Fs = [ analyze_function(F) || F <- AST, is_ast_function(F) ],
@@ -90,7 +94,7 @@ aggregate(Values) ->
     group_on_tag(Values).
 
 group_on_tag(Fs) ->
-    Keys = sort(proplists:get_keys(hd(Fs))),
+    Keys = proplists:get_keys(hd(Fs)),
     All_results = lists:flatten(Fs),
     aggregate2([ {Key, proplists:get_all_values(Key,All_results)} || 
                    Key <- Keys ]).
@@ -128,13 +132,16 @@ item_count(X) when is_integer(X) -> 1.
 
 
 analyze_function(AST) ->
-    sort([{complexity, structural_complexity(AST)},
-          {expressions_per_function, lines_per_function(AST)},
-          {clauses, clauses_per_function(AST)},
-          {arity, function_arity(AST)},
-          {expressions_per_line, expressions_per_function_line(AST)},
-          {variable_steppings, variable_steppings_per_function(AST)}
-         ]).
+    [{complexity, structural_complexity(AST)},
+     {expressions_per_function, lines_per_function(AST)},
+     {clauses, clauses_per_function(AST)},
+     {arity, function_arity(AST)},
+     {expressions_per_line, expressions_per_function_line(AST)},
+     {variable_steppings, variable_steppings_per_function(AST)}
+    ].
+
+warning_metric(Warnings) ->
+    {warnings, length(Warnings)}.
 
 expressions_per_function_line({function,_,_,_,Clauses}) -> 
     LNs = [ get_toplevel_linenumbers(C) || C <- Clauses],
