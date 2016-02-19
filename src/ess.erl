@@ -72,13 +72,61 @@ file(F, Opts, IncFile) ->
     {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPath),
     {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
         beam_lib:chunks(Bin,[abstract_code]),    
+    Value = [warning_metric(Warnings)|analyse(AST, Opts)]++lexical_analyse(F, Opts),
     #tree{type = file,
           name = F,
-          value = sort([warning_metric(Warnings) | analyse(AST, Opts)])
+          value = sort(Value)
          }.
 
 get_compile_options() ->
     [binary,verbose, debug_info, return].
+
+lexical_analyse(F, _Opts) ->
+    {ok, Bin} = file:read_file(F),
+    lexical_analyse_string(binary_to_list(Bin)).
+
+lexical_analyse_string(Str) ->
+    count_comment_and_code_lines(strip_lines(divide_into_lines(Str))).
+
+count_comment_and_code_lines(L) ->
+    Tot = length(L),
+    {Code, Comment, Blank} = count_comment_and_code_lines2(L, 0, 0, 0),
+    [{total_lines, Tot}, {lines_of_code, Code}, {lines_of_comments, Comment}, {blank_lines, Blank}].
+
+count_comment_and_code_lines2([], Code, Comment, Blank) ->
+    {Code, Comment, Blank};
+count_comment_and_code_lines2([[] | Ls], Code, Comment, Blank) ->
+    count_comment_and_code_lines2(Ls, Code, Comment, Blank+1);
+count_comment_and_code_lines2([L | Ls], Code, Comment, Blank) ->
+    case is_comment_line(L) of
+	true ->
+	    count_comment_and_code_lines2(Ls, Code, Comment+1, Blank);
+	_ ->
+	    count_comment_and_code_lines2(Ls, Code+1, Comment, Blank)
+    end.
+
+is_comment_line("%"++_) -> true;
+is_comment_line(_) -> false.
+
+
+divide_into_lines(Str) ->
+    dil(Str,[],[]).
+
+dil([],[],Res) ->
+    rev(Res);
+dil([],Current,Res) ->
+    rev([rev(Current)|Res]);
+dil([$\n|R],Current,Acc) ->
+    dil(R,[],[rev(Current)|Acc]);
+dil([C|R],Current,Acc) ->
+    dil(R,[C|Current],Acc).
+
+
+strip_lines(Ls) ->
+    [rev(remove_ws(rev(remove_ws(L)))) || L <- Ls ].
+
+remove_ws(L) ->
+    lists:dropwhile(fun(C) -> lists:member(C, [32,9]) end, L).
 
 analyse(AST, _Opts) -> 
     Fs = [ analyze_function(F) || F <- AST, is_ast_function(F) ],
@@ -375,3 +423,5 @@ usort(L) -> lists:usort(L).
     
 sum(X) -> lists:sum(X).
 
+rev(L) -> lists:reverse(L).
+			    
