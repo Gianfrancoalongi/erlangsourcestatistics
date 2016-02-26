@@ -86,12 +86,15 @@ lexical_analyse(F, _Opts) ->
     lexical_analyse_string(binary_to_list(Bin)).
 
 lexical_analyse_string(Str) ->
-    count_comment_and_code_lines(strip_lines(divide_into_lines(Str))).
+    handle_comment_percent(count_comment_and_code_lines(strip_lines(divide_into_lines(Str)))).
 
 count_comment_and_code_lines(L) ->
     Tot = length(L),
     {Code, Comment, Blank} = count_comment_and_code_lines2(L, 0, 0, 0),
-    [{total_lines, Tot}, {lines_of_code, Code}, {lines_of_comments, Comment}, {blank_lines, Blank}].
+    [{total_lines, Tot},
+     {lines_of_code, Code}, 
+     {lines_of_comments, Comment}, 
+     {blank_lines, Blank}].
 
 count_comment_and_code_lines2([], Code, Comment, Blank) ->
     {Code, Comment, Blank};
@@ -133,7 +136,16 @@ analyse(AST, _Opts) ->
     aggregate(Fs).
 
 aggregate_trees(Trees) ->
-    aggregate(extract_values(Trees)).
+    handle_comment_percent(aggregate(extract_values(Trees))).
+
+handle_comment_percent(L) ->
+    Percent = calculate_comment_to_line_percent(L),
+    replace_tag(comment_to_line_percent, Percent, L).
+
+calculate_comment_to_line_percent(L) ->
+    Lines = value_sum(gv(total_lines,L)),
+    Comments = value_sum(gv(lines_of_comments,L)),
+    round(100*(Comments/Lines)).
 
 extract_values(Trees) ->
     [ T#tree.value || T <- Trees ].
@@ -424,4 +436,10 @@ usort(L) -> lists:usort(L).
 sum(X) -> lists:sum(X).
 
 rev(L) -> lists:reverse(L).
-			    
+
+replace_tag(Tag, Value, L) ->
+    lists:keystore(Tag, 1, L, {Tag, Value}).
+
+gv(Key, L) ->
+    proplists:get_value(Key, L).
+
