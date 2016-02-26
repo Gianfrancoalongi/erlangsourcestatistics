@@ -200,25 +200,6 @@ analyze_function_with_recieve_after_test() ->
 			  ]),
     ?assertEqual(Expected, Res).
 
-analyze_simple_module_test() ->
-    Name = "../test/test/file_read_test.erl",
-    Res = ess:file(Name),
-    Expected = #tree{type = file,
-                     name = Name,
-                     value = lists:sort([{arity, val(0,0,0,2)},
-                                         {clauses, val(1,1,2,2)},
-                                         {complexity, val(0,0,0,2)},
-                                         {variable_steppings, val(0,0,0,2)},
-					 {expressions_per_line, val(1,1,3,3)},
-                                         {expressions_per_function, val(2,1,3,2)},
-                                         {blank_lines, 2},
-                                         {lines_of_code,7},
-                                         {lines_of_comments, 0},
-                                         {total_lines, 9},
-                                         {warnings, 1}
-                                        ])},
-    ?assertEqual(Expected, Res).
-
 analyze_less_simple_module_test() ->
     Name = "../test/test/file_read_test_2.erl",
     Res = ess:file(Name),
@@ -232,9 +213,10 @@ analyze_less_simple_module_test() ->
                                          {expressions_per_function, val(10,1,15,4)},
                                          {blank_lines, 3},
                                          {lines_of_code,24},
-                                         {lines_of_comments, 0},
-                                         {total_lines, 27},
-                                         {warnings, 0}
+                                         {lines_of_comments, 1},
+                                         {total_lines, 28},
+                                         {comment_to_line_percent, 4},
+                                         {warnings, 1}
                                         ])},
     ?assertEqual(Expected, Res).
     
@@ -430,6 +412,7 @@ analyze_directory_test() ->
     AggregateValues = lists:sort([{warnings, val(0,0,0,2)},
                                   {arity,val(2,1,3,2)},
                                   {clauses,val(1,1,2,2)},
+                                  {comment_to_line_percent, 0},
                                   {complexity,val(1,1,2,2)},
                                   {expressions_per_function,val(1,1,2,2)},
                                   {expressions_per_line,val(1,1,2,2)},
@@ -444,6 +427,7 @@ analyze_directory_test() ->
 		       value = lists:sort([{warnings, 0},
                                            {arity,val(1,1,1,1)},
 					   {clauses,val(1,1,1,1)},
+                                           {comment_to_line_percent, 0},
 					   {complexity,val(1,1,1,1)},
 					   {expressions_per_function,val(1,1,1,1)},
 					   {expressions_per_line,val(1,1,1,1)},
@@ -458,10 +442,12 @@ analyze_directory_test() ->
 		       value = lists:sort([{warnings, 0},
                                            {arity,val(2,2,2,1)},
 					   {clauses,val(1,1,1,1)},
+                                           {comment_to_line_percent, 0},
 					   {complexity,val(1,1,1,1)},
 					   {expressions_per_function,val(1,1,1,1)},
 					   {expressions_per_line,val(1,1,1,1)},
                                            {blank_lines, 2},
+
                                            {lines_of_code,4},
                                            {lines_of_comments, 0},
                                            {total_lines, 6},
@@ -479,15 +465,16 @@ analyze_deep_directory_test() ->
     Res = ess:dir(Dir),
     AggregateValues = lists:sort([{arity,val(4,0,13,8)},
                                   {clauses,val(3,1,11,8)},
+                                  {comment_to_line_percent, 2},
                                   {complexity,val(12,0,19,8)},
                                   {expressions_per_function,val(10,1,20,8)},
                                   {expressions_per_line,val(1,1,12,12)},
 				  {variable_steppings,val(1,0,1,8)},
                                   {blank_lines,val(3,1,8,4)},
                                   {lines_of_code,val(24,4,39,4)},
-                                  {lines_of_comments,val(0,0,0,4)},
-                                  {total_lines,val(27,5,47,4)},
-                                  {warnings, val(1,0,1,4)}
+                                  {lines_of_comments,val(1,0,1,4)},
+                                  {total_lines,val(28,5,48,4)},
+                                  {warnings, val(1,0,2,4)}
                                  ]),
     ?assertMatch(#tree{type = dir,
                        name = Dir,
@@ -513,7 +500,8 @@ comments_test() ->
     Expected = [{total_lines,4},
 		{lines_of_code,3},
 		{lines_of_comments,1},
-		{blank_lines,0}],
+		{blank_lines,0},
+                {comment_to_line_percent,25}],
     ?assertEqual(Expected, Res).
 
 blank_lines_test() ->
@@ -522,7 +510,8 @@ blank_lines_test() ->
     Expected = [{total_lines,5},
 		{lines_of_code,3},
 		{lines_of_comments,0},
-		{blank_lines,2}],
+		{blank_lines,2},
+                {comment_to_line_percent,0}],
     ?assertEqual(Expected, Res).
 
 func_1() ->    

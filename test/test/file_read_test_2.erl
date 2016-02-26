@@ -1,9 +1,10 @@
 -module(file_read_test_2).
 -export([a/1,b/2,c/3,d/4]).
 
+%% do it once
 a(X) when X > 2 ->
     case b(X,X/2) of
-        {ok,N} ->
+        {ok,N, D} ->
             N;
         {error,Y} ->
             case c(Y,X,X/2) of
