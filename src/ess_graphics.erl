@@ -150,15 +150,15 @@ generate_chart_js(DivId, Header, MaxY, DataPoints) ->
         interval: 1
       },
       axisY:{
-        title: \""++Header++"\",              
+        title: \""++Header++"\",
         gridThickness: 1,
         tickThickness: 1,
         gridColor: \"lightgrey\",
         tickColor: \"lightgrey\",
         lineThickness: 0,
         valueFormatString:\"#.\",
-        maximum: "++i2l(MaxY)++",
-        interval: 1        
+        maximum: "++i2l(round(1.1*MaxY))++",
+        interval: "++i2l(round(MaxY/10)+1)++"
       },
 
       data: [
