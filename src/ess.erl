@@ -90,10 +90,12 @@ lexical_analyse_string(Str) ->
 
 count_comment_and_code_lines(L) ->
     Tot = length(L),
+    MaxLine = max_line(L),
     {Code, Comment, Blank} = count_comment_and_code_lines2(L, 0, 0, 0),
     [{total_lines, Tot},
      {lines_of_code, Code}, 
      {lines_of_comments, Comment}, 
+     {max_line_length, MaxLine},
      {blank_lines, Blank}].
 
 count_comment_and_code_lines2([], Code, Comment, Blank) ->
@@ -111,6 +113,8 @@ count_comment_and_code_lines2([L | Ls], Code, Comment, Blank) ->
 is_comment_line("%"++_) -> true;
 is_comment_line(_) -> false.
 
+max_line(Ls) ->
+    aggregate([ {max_line_length, length(L)} || L <- Ls ]).
 
 divide_into_lines(Str) ->
     dil(Str,[],[]).
