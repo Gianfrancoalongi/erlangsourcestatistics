@@ -71,7 +71,7 @@ file(F, Opts, IncFile) ->
     CompileOpts = get_compile_options(),
     {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPath),
     {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
-        beam_lib:chunks(Bin,[abstract_code]),    
+        beam_lib:chunks(Bin,[abstract_code]),
     Value = [warning_metric(Warnings)|analyse(AST, Opts)]++lexical_analyse(F, Opts),
     #tree{type = file,
           name = F,
@@ -141,9 +141,14 @@ strip_lines(Ls) ->
 remove_ws(L) ->
     lists:dropwhile(fun(C) -> lists:member(C, [32,9]) end, L).
 
-analyse(AST, _Opts) -> 
+analyse(AST, _Opts) ->     
     Fs = [ analyze_function(F) || F <- AST, is_ast_function(F) ],
-    aggregate(Fs).
+    case Fs of
+        [] -> 
+            [];
+        _ ->
+            aggregate(Fs)
+    end.
 
 aggregate_trees(Trees) ->
     handle_comment_percent(aggregate(extract_values(Trees))).
@@ -356,6 +361,8 @@ structural_complexity({lc,_,Body,Generator}) ->
     1+structural_complexity(Body)+structural_complexity(Generator);
 structural_complexity({generate,_,Expr,Guards}) ->
     structural_complexity(Expr) + structural_complexity(Guards);
+structural_complexity({b_generate,_,Expr,Guards}) ->
+    structural_complexity(Expr) + structural_complexity(Guards);
 structural_complexity({'catch',_,CallExpr}) ->
     1+structural_complexity(CallExpr);
 structural_complexity({'fun',_,Expr}) ->
@@ -366,6 +373,8 @@ structural_complexity({'try',_,CallExprs,_,Exprs,_})->
     1+structural_complexity(CallExprs)+structural_complexity(Exprs);
 structural_complexity({block, _, CallExprs}) ->
     1+structural_complexity(CallExprs);
+structural_complexity({bc,_,Body,Generator}) ->
+    1+structural_complexity(Body)+structural_complexity(Generator);
 
 structural_complexity({function,_,_}) -> 0;
 structural_complexity({function,_,_,_}) -> 0;

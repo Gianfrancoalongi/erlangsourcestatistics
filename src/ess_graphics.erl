@@ -6,10 +6,28 @@
 
 
 gen_res() ->
-    Res = [ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/reg/src",[], "sbg_inc.conf"),
-           ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/oab/src/",[], "sbg_inc.conf"),
-           ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/b2b/src/",[], "sbg_inc.conf")],
+    RootDir = "/local/scratch/etxpell/proj/sgc",
+    adjust_paths(RootDir),
+    SgcPaths = [ filename:join([RootDir, "src/sgc", D, "src"]) || D <- sgc_dirs() ],
+    SyfPaths = [ filename:join([RootDir, "src/syf", D, "src"]) || D <- syf_dirs() ],
+    Res = [ ess:dir(P, [], "sbg_inc.conf") || P <- SgcPaths ++ SyfPaths ],
     file:write_file("./res.data", term_to_binary(Res)).
+
+
+sgc_dirs() -> 
+    [ b2b, cha, dia, hiw, mph, oab, reg, sgm, sgn, sni, tra, trc ].
+
+syf_dirs() -> 
+    [ blm, ccpc, chstb, chtr, comte, 'comte_1.5', cpl, ecop, esc,
+      "evip/evip_erl", gcp, generic, hcfa, lpo, nih, om, omgen, oms, omstb, otp, perf, plc, pmf,
+      pms, rcm, sbm, "sctp/sctp_erl", sip, smm, swm, "sys/sys_erl" ].
+        
+adjust_paths(Root) ->
+    EcopDir = filename:join(Root, "src/syf/ecop/out"),
+    add_path(EcopDir).
+
+add_path(Path) ->
+    code:add_pathz(Path).
 
 t() ->
     {ok,Bin}  = file:read_file("./res.data"),

@@ -121,7 +121,8 @@ structural_complexity_test_cases() ->
      {"catch","f()-> case catch a:b(C) of ok -> 1 end.",3,structural_complexity},
      {"fun","f(fun(C) -> a(C) end) -> ok.",2,structural_complexity},
      {"try","f() ->try a() catch O -> done end.",3,structural_complexity},
-     {"block","f() -> begin A=5, A+1 end.",3,structural_complexity}
+     {"block","f() -> begin A=5, A+1 end.",3,structural_complexity},
+     {"binary comprehension","f() -> << <<B>> || <<B>> <= X, B =/= 0 >>.",4, structural_complexity}
     ].
 
 analyze_function_test() ->
