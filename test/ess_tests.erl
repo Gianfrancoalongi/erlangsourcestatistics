@@ -217,7 +217,7 @@ analyze_less_simple_module_test() ->
                                          {total_lines, 28},
                                          {comment_to_line_percent, 4},
                                          {warnings, 1},
-                                         {max_line_length, 27}
+                                         {line_lengths, val(27,0,324,28)}
                                         ])},
     ?assertEqual(Expected, Res).
     
@@ -422,7 +422,7 @@ analyze_directory_test() ->
                                   {lines_of_comments,val(0,0,0,2)},
                                   {total_lines,val(6,5,11,2)},
 				  {variable_steppings,val(1,0,1,2)},
-                                  {max_line_length, val(25,22,47,2)}
+                                  {line_lengths, val(25,0,139,11)}
                                  ]),
     ValuesForA = #tree{type = file,
                        name = "../test/test/test_dir/a.erl",
@@ -438,7 +438,7 @@ analyze_directory_test() ->
                                            {lines_of_comments, 0},
                                            {total_lines, 5},
 					   {variable_steppings,val(0,0,0,1)},
-                                           {max_line_length, 22}])},
+                                           {line_lengths, val(22, 0, 67, 5)}])},
     
     ValuesForB = #tree{type = file,
                        name = "../test/test/test_dir/b.erl",
@@ -454,12 +454,11 @@ analyze_directory_test() ->
                                            {lines_of_comments, 0},
                                            {total_lines, 6},
 					   {variable_steppings,val(1,1,1,1)},
-                                           {max_line_length, 25}])},
+                                           {line_lengths, val(25, 0, 72, 6)}])},
     Expected = #tree{type = dir,
                      name = "../test/test/test_dir/",
                      value = AggregateValues,
                      children = [ValuesForA, ValuesForB]},
-
     ?assertMatch(Expected, Res).
 
 analyze_deep_directory_test() ->
@@ -477,9 +476,8 @@ analyze_deep_directory_test() ->
                                   {lines_of_comments,val(1,0,1,4)},
                                   {total_lines,val(28,5,48,4)},
                                   {warnings, val(1,0,2,4)},
-                                  {max_line_length, val(27,22,98,4)}
+                                  {line_lengths, val(27,0,524,48)}
                                  ]),
-
     ?assertMatch(#tree{type = dir,
                        name = Dir,
                        value = AggregateValues}, 
