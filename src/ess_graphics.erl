@@ -3,7 +3,7 @@
 -export([generate/1]).
 
 -export([t/0, gen_res/0]).
-
+-define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
 
 gen_res() ->
     RootDir = "/local/scratch/etxpell/proj/sgc",
@@ -41,7 +41,7 @@ generate(AnalysisResults) ->
     generate_module_charts(Categories, DivIds, AnalysisResults).
 
 generate_block_charts(Categories, DivIds, AnalysisResults) ->
-    DstDir = "/home/etxpell/dev_patches",
+    DstDir = ?RESULT_DIR,
     FileName = filename:join(DstDir, "analysis")++".html",
     generate_chart(FileName, Categories, DivIds, AnalysisResults).
 
@@ -51,7 +51,7 @@ generate_module_charts(Categories, DivIds, [[]|R]) ->
 generate_module_charts(Categories, DivIds, [AnalysisResult|R]) ->
     Data = AnalysisResult#tree.children,
     Name = get_good_name(AnalysisResult#tree.name),
-    DstDir = "/home/etxpell/dev_patches",
+    DstDir = ?RESULT_DIR,
     FileName = filename:join(DstDir, Name++"_analysis")++".html",
     generate_chart(FileName, Categories, DivIds, Data),
     generate_module_charts(Categories, DivIds, R).
