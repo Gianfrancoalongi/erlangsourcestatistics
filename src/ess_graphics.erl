@@ -56,6 +56,27 @@ generate_module_charts(Categories, DivIds, [AnalysisResult|R]) ->
     generate_chart(FileName, Categories, DivIds, Data),
     generate_module_charts(Categories, DivIds, R).
 
+
+-- we need to prepare the data so that we can have generic graph generation functions
+-- that consume some kind of nice data format 
+-- {arity, [{oab,#value{}},{reg,#value{}}...]
+-- The generate_chart function should be recursive
+-- 
+
+generate_chart(Parent, []) ->
+    ok;
+generate_chart(Parent, [T|R]) ->
+    Categories = get_analyis_categories(T),
+    DivIds = lists:seq(1,length(Categories)),
+    Name = get_good_name(T#tree.name),
+    Values = T#tree.value,
+    FileName = filename:join(DstDir, Name++"_analysis")++".html",
+    generate_chart(FileName, Categories, DivIds, Values),
+    Children = T#tree.children,    
+    generate_chart(Name, Children),
+    generate_chart(Parent, R).
+
+   
 generate_chart(FileName, Categories, DivIds, DataSet) ->
     JSCharts = generate_js_charts(Categories, DivIds, DataSet),
     Divs = generate_divs(DivIds),
