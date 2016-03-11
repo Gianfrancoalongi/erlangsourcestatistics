@@ -102,6 +102,6 @@ update_qrs(
                             QRs,
                             #oabQueryResult{streamId = StreamId,
                                             supported_ftm_list =  NewBgfFmt}),
-    update_qrs(RDTail, NewQRs);
+    update_qrs(RDTail, NewQRs).
 
 -endif.
