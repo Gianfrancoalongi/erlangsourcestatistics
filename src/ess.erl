@@ -20,7 +20,11 @@ dir(F, Opts) ->
 dir(F, Opts, IncFile) ->
     Tree = recursive_dir([F]),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
-    hd(traverse(Tree, ForEachFileFun)).
+    case traverse(Tree, ForEachFileFun) of
+        [Res] -> Res;
+        _ -> []
+    end.
+
 
 traverse([{Dir,Files,SubDirs}|R], Fun) ->
     Stats = for_each_file(Files, Fun) ++ traverse(SubDirs, Fun),
@@ -40,19 +44,24 @@ for_each_file(Files, Fun) ->
 recursive_dir([]) -> 
     [];
 recursive_dir([Dir|R]) ->
-    {ok, Files} = file:list_dir(Dir),    
-    FullNames = [ filename:join(Dir,F) || F <- Files ],
-    DirFiles = [ F || F <- FullNames, not filelib:is_dir(F), 
-                      is_erlang_source_file(F) ],
-    Dirs = [ F || F <- FullNames, filelib:is_dir(F) ],
-    RecursiveStuff = recursive_dir(Dirs),
-    Res = case {DirFiles, RecursiveStuff} of
-              {[], []} ->
-                  [];
-              _ -> 
-                  [{Dir, DirFiles, recursive_dir(Dirs)}]
-          end,            
-    Res  ++ recursive_dir(R).
+    case file:list_dir(Dir) of
+        {ok, Files} ->
+            FullNames = [ filename:join(Dir,F) || F <- Files ],
+            DirFiles = [ F || F <- FullNames, not filelib:is_dir(F), 
+                              is_erlang_source_file(F) ],
+            Dirs = [ F || F <- FullNames, filelib:is_dir(F) ],
+            RecursiveStuff = recursive_dir(Dirs),
+            Res = case {DirFiles, RecursiveStuff} of
+                      {[], []} ->
+                          [];
+                      _ -> 
+                          [{Dir, DirFiles, recursive_dir(Dirs)}]
+                  end,
+            Res  ++ recursive_dir(R);
+        Err ->
+            io:format("error reading dir: ~s~n", [Dir]),
+            recursive_dir(R)
+    end.
 
 is_erlang_source_file(F) ->
     filename:extension(F) == ".erl".
@@ -67,16 +76,24 @@ file(F) ->
 file(F, Opts) ->
     file(F, Opts, []).
 file(F, Opts, IncFile) ->
-    IncPath = get_compile_include_path(IncFile),
-    CompileOpts = get_compile_options(),
-    {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPath),
-    {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
-        beam_lib:chunks(Bin,[abstract_code]),
-    Value = [warning_metric(Warnings)|analyse(AST, Opts)]++lexical_analyse(F, Opts),
-    #tree{type = file,
-          name = F,
-          value = sort(Value)
-         }.
+    try
+        io:format("  f: ~s~n", [F]),
+        IncPath = get_compile_include_path(IncFile),
+        CompileOpts = get_compile_options(),
+        {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPath),
+        {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
+            beam_lib:chunks(Bin,[abstract_code]),
+        Value = [warning_metric(Warnings)|analyse(AST, Opts)]++lexical_analyse(F, Opts),
+        #tree{type = file,
+              name = F,
+              value = sort(Value)
+             }
+    catch 
+        _:Err ->
+            io:format("error: file: ~p: ~p~n", [F, Err]),
+            undefined
+    end.
+
 
 get_compile_options() ->
     [binary,verbose, debug_info, return].
