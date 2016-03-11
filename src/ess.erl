@@ -20,7 +20,11 @@ dir(F, Opts) ->
 dir(F, Opts, IncFile) ->
     Tree = recursive_dir([F]),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
-    hd(traverse(Tree, ForEachFileFun)).
+    case traverse(Tree, ForEachFileFun) of
+        [Res] -> Res;
+        _ -> []
+    end.
+
 
 traverse([{Dir,Files,SubDirs}|R], Fun) ->
     Stats = for_each_file(Files, Fun) ++ traverse(SubDirs, Fun),
@@ -40,19 +44,24 @@ for_each_file(Files, Fun) ->
 recursive_dir([]) -> 
     [];
 recursive_dir([Dir|R]) ->
-    {ok, Files} = file:list_dir(Dir),    
-    FullNames = [ filename:join(Dir,F) || F <- Files ],
-    DirFiles = [ F || F <- FullNames, not filelib:is_dir(F), 
-                      is_erlang_source_file(F) ],
-    Dirs = [ F || F <- FullNames, filelib:is_dir(F) ],
-    RecursiveStuff = recursive_dir(Dirs),
-    Res = case {DirFiles, RecursiveStuff} of
-              {[], []} ->
-                  [];
-              _ -> 
-                  [{Dir, DirFiles, recursive_dir(Dirs)}]
-          end,            
-    Res  ++ recursive_dir(R).
+    case file:list_dir(Dir) of
+        {ok, Files} ->
+            FullNames = [ filename:join(Dir,F) || F <- Files ],
+            DirFiles = [ F || F <- FullNames, not filelib:is_dir(F), 
+                              is_erlang_source_file(F) ],
+            Dirs = [ F || F <- FullNames, filelib:is_dir(F) ],
+            RecursiveStuff = recursive_dir(Dirs),
+            Res = case {DirFiles, RecursiveStuff} of
+                      {[], []} ->
+                          [];
+                      _ -> 
+                          [{Dir, DirFiles, recursive_dir(Dirs)}]
+                  end,
+            Res  ++ recursive_dir(R);
+        Err ->
+            io:format("error reading dir: ~s~n", [Dir]),
+            recursive_dir(R)
+    end.
 
 is_erlang_source_file(F) ->
     filename:extension(F) == ".erl".
@@ -67,16 +76,24 @@ file(F) ->
 file(F, Opts) ->
     file(F, Opts, []).
 file(F, Opts, IncFile) ->
-    IncPath = get_compile_include_path(IncFile),
-    CompileOpts = get_compile_options(),
-    {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPath),
-    {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
-        beam_lib:chunks(Bin,[abstract_code]),    
-    Value = [warning_metric(Warnings)|analyse(AST, Opts)]++lexical_analyse(F, Opts),
-    #tree{type = file,
-          name = F,
-          value = sort(Value)
-         }.
+    try
+        io:format("  f: ~s~n", [F]),
+        IncPath = get_compile_include_path(IncFile),
+        CompileOpts = get_compile_options(),
+        {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPath),
+        {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
+            beam_lib:chunks(Bin,[abstract_code]),
+        Value = [warning_metric(Warnings)|analyse(AST, Opts)]++lexical_analyse(F, Opts),
+        #tree{type = file,
+              name = F,
+              value = sort(Value)
+             }
+    catch 
+        _:Err ->
+            io:format("error: file: ~p: ~p~n", [F, Err]),
+            undefined
+    end.
+
 
 get_compile_options() ->
     [binary,verbose, debug_info, return].
@@ -90,10 +107,12 @@ lexical_analyse_string(Str) ->
 
 count_comment_and_code_lines(L) ->
     Tot = length(L),
+    LineLengths = line_lengths(L),
     {Code, Comment, Blank} = count_comment_and_code_lines2(L, 0, 0, 0),
     [{total_lines, Tot},
      {lines_of_code, Code}, 
      {lines_of_comments, Comment}, 
+     {line_lengths, LineLengths},
      {blank_lines, Blank}].
 
 count_comment_and_code_lines2([], Code, Comment, Blank) ->
@@ -111,6 +130,14 @@ count_comment_and_code_lines2([L | Ls], Code, Comment, Blank) ->
 is_comment_line("%"++_) -> true;
 is_comment_line(_) -> false.
 
+line_lengths(Ls) ->
+    N = length(Ls),
+    Lengths =[ length(L) || L <- Ls ],
+    Max = lists:max(Lengths),
+    Min = lists:min(Lengths),
+    Sum = lists:sum(Lengths),
+    Mean = round(Sum / N),
+    #val{max=Max, min=Min, avg=Mean, sum=Sum, n=N}.
 
 divide_into_lines(Str) ->
     dil(Str,[],[]).
@@ -131,9 +158,14 @@ strip_lines(Ls) ->
 remove_ws(L) ->
     lists:dropwhile(fun(C) -> lists:member(C, [32,9]) end, L).
 
-analyse(AST, _Opts) -> 
+analyse(AST, _Opts) ->     
     Fs = [ analyze_function(F) || F <- AST, is_ast_function(F) ],
-    aggregate(Fs).
+    case Fs of
+        [] -> 
+            [];
+        _ ->
+            aggregate(Fs)
+    end.
 
 aggregate_trees(Trees) ->
     handle_comment_percent(aggregate(extract_values(Trees))).
@@ -346,6 +378,8 @@ structural_complexity({lc,_,Body,Generator}) ->
     1+structural_complexity(Body)+structural_complexity(Generator);
 structural_complexity({generate,_,Expr,Guards}) ->
     structural_complexity(Expr) + structural_complexity(Guards);
+structural_complexity({b_generate,_,Expr,Guards}) ->
+    structural_complexity(Expr) + structural_complexity(Guards);
 structural_complexity({'catch',_,CallExpr}) ->
     1+structural_complexity(CallExpr);
 structural_complexity({'fun',_,Expr}) ->
@@ -356,6 +390,8 @@ structural_complexity({'try',_,CallExprs,_,Exprs,_})->
     1+structural_complexity(CallExprs)+structural_complexity(Exprs);
 structural_complexity({block, _, CallExprs}) ->
     1+structural_complexity(CallExprs);
+structural_complexity({bc,_,Body,Generator}) ->
+    1+structural_complexity(Body)+structural_complexity(Generator);
 
 structural_complexity({function,_,_}) -> 0;
 structural_complexity({function,_,_,_}) -> 0;

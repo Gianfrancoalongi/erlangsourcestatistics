@@ -6,10 +6,28 @@
 
 
 gen_res() ->
-    Res = [ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/reg/src",[], "sbg_inc.conf"),
-           ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/oab/src/",[], "sbg_inc.conf"),
-           ess:dir("/local/scratch/etxpell/proj/sgc/src/sgc/b2b/src/",[], "sbg_inc.conf")],
+    RootDir = "/local/scratch/etxpell/proj/sgc",
+    adjust_paths(RootDir),
+    SgcPaths = [ filename:join([RootDir, "src/sgc", D, "src"]) || D <- sgc_dirs() ],
+    SyfPaths = [ filename:join([RootDir, "src/syf", D, "src"]) || D <- syf_dirs() ],
+    Res = [ ess:dir(P, [], "sbg_inc.conf") || P <- SgcPaths ++ SyfPaths ],
     file:write_file("./res.data", term_to_binary(Res)).
+
+
+sgc_dirs() -> 
+    [ b2b, cha, dia, hiw, mph, oab, reg, sgm, sgn, sni, tra, trc ].
+
+syf_dirs() -> 
+    [ blm, ccpc, chstb, chtr, comte, cpl, ecop, esc,
+      gcp, generic, hcfa, om, omgen, oms, omstb, perf, plc, 
+      pmf, pms, rcm, sbm, "sctp/sctp_erl", sip, smm, swm, "sys/sys_erl" ].
+        
+adjust_paths(Root) ->
+    EcopDir = filename:join(Root, "src/syf/ecop/out"),
+    add_path(EcopDir).
+
+add_path(Path) ->
+    code:add_pathz(Path).
 
 t() ->
     {ok,Bin}  = file:read_file("./res.data"),
@@ -28,6 +46,8 @@ generate_block_charts(Categories, DivIds, AnalysisResults) ->
     generate_chart(FileName, Categories, DivIds, AnalysisResults).
 
 generate_module_charts(_,_,[]) -> ok;
+generate_module_charts(Categories, DivIds, [[]|R]) ->
+    generate_module_charts(Categories, DivIds, R);
 generate_module_charts(Categories, DivIds, [AnalysisResult|R]) ->
     Data = AnalysisResult#tree.children,
     Name = get_good_name(AnalysisResult#tree.name),
@@ -50,6 +70,13 @@ generate_js_charts(Categories, DivIds, DataSet) ->
               RawData = [ {get_good_name(Dir), gv(Tag, Value)} ||  
                             #tree{name = Dir, value = Value} <- DataSet ],
               DataPoints = generate_datapoints(RawData),
+              case maximum_average(RawData) of 
+                  undefined ->
+                      io:format("RawData: ~p~n",[RawData]);
+                  _ ->
+                      ok
+              end,
+              io:format("Maximum average:~p~n",[maximum_average(RawData)]),
               MaxY = 5+maximum_average(RawData),
               
               Header = capitalize(a2l(Tag)),
@@ -67,8 +94,11 @@ maximum_average(RawData) ->
 
 avg_value(#val{avg = Value}) ->
     Value;
-avg_value(Value) ->
-    Value.
+avg_value(Value) when is_integer(Value) ->
+    Value;
+avg_value(_) ->
+    0.
+
 
 generate_datapoints(RawData) ->
     lists:map(fun generate_datapoint/1, RawData).

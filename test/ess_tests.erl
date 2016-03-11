@@ -121,7 +121,8 @@ structural_complexity_test_cases() ->
      {"catch","f()-> case catch a:b(C) of ok -> 1 end.",3,structural_complexity},
      {"fun","f(fun(C) -> a(C) end) -> ok.",2,structural_complexity},
      {"try","f() ->try a() catch O -> done end.",3,structural_complexity},
-     {"block","f() -> begin A=5, A+1 end.",3,structural_complexity}
+     {"block","f() -> begin A=5, A+1 end.",3,structural_complexity},
+     {"binary comprehension","f() -> << <<B>> || <<B>> <= X, B =/= 0 >>.",4, structural_complexity}
     ].
 
 analyze_function_test() ->
@@ -216,7 +217,8 @@ analyze_less_simple_module_test() ->
                                          {lines_of_comments, 1},
                                          {total_lines, 28},
                                          {comment_to_line_percent, 4},
-                                         {warnings, 1}
+                                         {warnings, 1},
+                                         {line_lengths, val(27,0,324,28)}
                                         ])},
     ?assertEqual(Expected, Res).
     
@@ -420,7 +422,8 @@ analyze_directory_test() ->
                                   {lines_of_code,val(4,4,8,2)},
                                   {lines_of_comments,val(0,0,0,2)},
                                   {total_lines,val(6,5,11,2)},
-				  {variable_steppings,val(1,0,1,2)}
+				  {variable_steppings,val(1,0,1,2)},
+                                  {line_lengths, val(25,0,139,11)}
                                  ]),
     ValuesForA = #tree{type = file,
                        name = "../test/test/test_dir/a.erl",
@@ -435,7 +438,8 @@ analyze_directory_test() ->
                                            {lines_of_code,4},
                                            {lines_of_comments, 0},
                                            {total_lines, 5},
-					   {variable_steppings,val(0,0,0,1)}])},
+					   {variable_steppings,val(0,0,0,1)},
+                                           {line_lengths, val(22, 0, 67, 5)}])},
     
     ValuesForB = #tree{type = file,
                        name = "../test/test/test_dir/b.erl",
@@ -447,17 +451,15 @@ analyze_directory_test() ->
 					   {expressions_per_function,val(1,1,1,1)},
 					   {expressions_per_line,val(1,1,1,1)},
                                            {blank_lines, 2},
-
                                            {lines_of_code,4},
                                            {lines_of_comments, 0},
                                            {total_lines, 6},
-					   {variable_steppings,val(1,1,1,1)}])},
-
+					   {variable_steppings,val(1,1,1,1)},
+                                           {line_lengths, val(25, 0, 72, 6)}])},
     Expected = #tree{type = dir,
                      name = "../test/test/test_dir/",
                      value = AggregateValues,
                      children = [ValuesForA, ValuesForB]},
-
     ?assertMatch(Expected, Res).
 
 analyze_deep_directory_test() ->
@@ -474,7 +476,8 @@ analyze_deep_directory_test() ->
                                   {lines_of_code,val(24,4,39,4)},
                                   {lines_of_comments,val(1,0,1,4)},
                                   {total_lines,val(28,5,48,4)},
-                                  {warnings, val(1,0,2,4)}
+                                  {warnings, val(1,0,2,4)},
+                                  {line_lengths, val(27,0,524,48)}
                                  ]),
     ?assertMatch(#tree{type = dir,
                        name = Dir,
@@ -496,22 +499,14 @@ recurse_deep_directory_test() ->
 
 comments_test() ->
     Str = func_1(),
-    Res = ess:lexical_analyse_string(Str),
-    Expected = [{total_lines,4},
-		{lines_of_code,3},
-		{lines_of_comments,1},
-		{blank_lines,0},
-                {comment_to_line_percent,25}],
+    Res = gv(lines_of_comments,ess:lexical_analyse_string(Str)),
+    Expected = 1,
     ?assertEqual(Expected, Res).
 
 blank_lines_test() ->
     Str = func_2(),
-    Res = ess:lexical_analyse_string(Str),
-    Expected = [{total_lines,5},
-		{lines_of_code,3},
-		{lines_of_comments,0},
-		{blank_lines,2},
-                {comment_to_line_percent,0}],
+    Res = gv(blank_lines,ess:lexical_analyse_string(Str)),
+    Expected = 2,
     ?assertEqual(Expected, Res).
 
 func_1() ->    
@@ -542,4 +537,8 @@ sort(L) ->
 
 debug(X) ->
     io:format(user,"~p~n",[X]).
+
+gv(Key, L) ->
+    proplists:get_value(Key, L).
+
 
