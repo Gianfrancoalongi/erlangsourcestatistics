@@ -195,6 +195,9 @@ generate_chart_js(DivId, Header, MaxY, DataPoints) ->
       {        
         type: \"bubble\",     
         toolTipContent: \"<span style='\\\"'color: {color};'\\\"'><strong>{label}</strong></span><br/> <strong>Max "++Header++"</strong> {z} <br/> <strong>Mean "++Header++"</strong> {y} <br/>\",
+
+        click: function(e) { window.location.href = e.dataPoint.label+\"_analysis.html\"; },
+
         dataPoints: 
         ["
 ++string:join(DataPoints,",\n")++" 
