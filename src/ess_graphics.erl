@@ -1,6 +1,7 @@
 -module(ess_graphics).
 -include("ess.hrl").
 -export([generate/1]).
+-compile(export_all).
 
 -export([t/0, gen_res/0]).
 -define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
@@ -8,18 +9,40 @@
 gen_res() ->
     RootDir = "/local/scratch/etxpell/proj/sgc",
     adjust_paths(RootDir),
-    SgcPaths = [ filename:join([RootDir, "src/sgc", D, "src"]) || D <- sgc_dirs() ],
-    SyfPaths = [ filename:join([RootDir, "src/syf", D, "src"]) || D <- syf_dirs() ],
-    Res = [ ess:dir(P, [], "sbg_inc.conf") || P <- SgcPaths ++ SyfPaths ],
-    file:write_file("./res.data", term_to_binary(Res)).
+    
+    SGC = do_tree(sgc_dirs(RootDir) ++ syf_dirs(RootDir)),
+    file:write_file("./res.data", term_to_binary(SGC)).
+    
+t() ->
+    T = get_tree(),
+    generate(T).
 
+do_tree(Dirs) ->
+    RawChildren = [ ess:dir(P, [], "sbg_inc.conf") || P <- Dirs ],
+    Children = remove_empty_trees(RawChildren),
+    #tree{name="SGC-top",
+          value = ess:aggregate_trees(Children),
+          children = Children}.
 
-sgc_dirs() -> 
+get_tree() ->
+    {ok,Bin}  = file:read_file("./res.data"),
+    binary_to_term(Bin).
+
+sgc_dirs(RootDir) ->
+    block_dirs(filename:join(RootDir, "src/sgc"), sgc_blocks()).
+
+syf_dirs(RootDir) ->
+    block_dirs(filename:join(RootDir, "src/syf"), syf_blocks()).
+
+block_dirs(Dir, Blocks) ->
+    [ filename:join([Dir, D, "src"]) || D <- Blocks ].
+
+sgc_blocks() -> 
     [ b2b, cha, dia, hiw, mph, oab, reg, sgm, sgn, sni, tra, trc ].
 
-syf_dirs() -> 
-    [ blm, ccpc, chstb, chtr, comte, cpl, ecop, esc,
-      gcp, generic, hcfa, om, omgen, oms, omstb, perf, plc, 
+syf_blocks() -> 
+    [ blm, ccpc, comte, cpl, ecop, esc,
+      gcp, generic, hcfa, om, omgen, oms, perf, plc, 
       pmf, pms, rcm, sbm, "sctp/sctp_erl", sip, smm, swm, "sys/sys_erl" ].
         
 adjust_paths(Root) ->
@@ -29,86 +52,68 @@ adjust_paths(Root) ->
 add_path(Path) ->
     code:add_pathz(Path).
 
-t() ->
-    {ok,Bin}  = file:read_file("./res.data"),
-    Res = binary_to_term(Bin),
-    generate(Res).
-
-generate(AnalysisResults) ->
-    Categories = get_analyis_categories(AnalysisResults),
+generate(TopTree) ->
+    {Name, Data} = tag_transpose(TopTree),
+    Categories = get_analyis_categories(TopTree),
     DivIds = lists:seq(1,length(Categories)),
-    generate_block_charts(Categories, DivIds, AnalysisResults),
-    generate_module_charts(Categories, DivIds, AnalysisResults).
+    generate_chart_page(Name, Categories, DivIds, Data).
 
-generate_block_charts(Categories, DivIds, AnalysisResults) ->
-    DstDir = ?RESULT_DIR,
-    FileName = filename:join(DstDir, "analysis")++".html",
-    generate_chart(FileName, Categories, DivIds, AnalysisResults).
-
-generate_module_charts(_,_,[]) -> ok;
-generate_module_charts(Categories, DivIds, [[]|R]) ->
-    generate_module_charts(Categories, DivIds, R);
-generate_module_charts(Categories, DivIds, [AnalysisResult|R]) ->
-    Data = AnalysisResult#tree.children,
-    Name = get_good_name(AnalysisResult#tree.name),
+generate_chart_page(Name, Categories, DivIds, Data) ->
     DstDir = ?RESULT_DIR,
     FileName = filename:join(DstDir, Name++"_analysis")++".html",
-    generate_chart(FileName, Categories, DivIds, Data),
-    generate_module_charts(Categories, DivIds, R).
-
-
--- we need to prepare the data so that we can have generic graph generation functions
--- that consume some kind of nice data format 
--- {arity, [{oab,#value{}},{reg,#value{}}...]
--- The generate_chart function should be recursive
--- 
-
-generate_chart(Parent, []) ->
-    ok;
-generate_chart(Parent, [T|R]) ->
-    Categories = get_analyis_categories(T),
-    DivIds = lists:seq(1,length(Categories)),
-    Name = get_good_name(T#tree.name),
-    Values = T#tree.value,
-    FileName = filename:join(DstDir, Name++"_analysis")++".html",
-    generate_chart(FileName, Categories, DivIds, Values),
-    Children = T#tree.children,    
-    generate_chart(Name, Children),
-    generate_chart(Parent, R).
-
-   
-generate_chart(FileName, Categories, DivIds, DataSet) ->
-    JSCharts = generate_js_charts(Categories, DivIds, DataSet),
+    JS = generate_js_charts(Categories, DivIds, Data),
     Divs = generate_divs(DivIds),
     Table = generate_table(Divs),
-    HTML = generate_html(Table, JSCharts),
+    
+    io:format("FileName:~p~n"
+              "JS:~p~n"
+              "Divs:~p~n"
+              "Table:~p~n",
+              [FileName, JS, Divs, Table]),
+
+    HTML = generate_html(Table, JS),
     file:write_file(FileName, HTML).
 
-generate_js_charts(Categories, DivIds, DataSet) ->
+generate_js_charts(Categories, DivIds, Data) ->
     Z = lists:zip(Categories, DivIds),
     lists:map(
       fun({Tag,DivId}) ->
-              RawData = [ {get_good_name(Dir), gv(Tag, Value)} ||  
-                            #tree{name = Dir, value = Value} <- DataSet ],
+              TagData = gv(Tag, Data),
+              RawData = [ {get_good_name(Dir), Val} || {Dir, Val} <- TagData ],
               DataPoints = generate_datapoints(RawData),
-              case maximum_average(RawData) of 
-                  undefined ->
-                      io:format("RawData: ~p~n",[RawData]);
-                  _ ->
-                      ok
-              end,
-              io:format("Maximum average:~p~n",[maximum_average(RawData)]),
               MaxY = 5+maximum_average(RawData),
-              
               Header = capitalize(a2l(Tag)),
               generate_chart_js(DivId, Header, MaxY, DataPoints)
       end,
      Z).
 
+%% we need to prepare the data so that we can have generic graph generation fuanctions
+%% that consume some kind of nice data format 
+%% {arity, [{oab,#value{}},{reg,#value{}}...]
+%% The generate_chart function should be recursive
+tag_transpose(#tree{name=N, value=Value, children=[]}) ->
+    {get_good_name(N), Value};
+tag_transpose(#tree{name=N, children=Children}) ->
+    {get_good_name(N), tag_transpose_children(Children)}.
+
+tag_transpose_children(Children) ->
+    Tags = get_analyis_categories(Children),
+    [ {Tag, tag_values(Tag, Children)}  || Tag <- Tags ].
+
+remove_empty_trees(L) ->
+    [ T || T <- L, is_record(T, tree) ].
+
+tag_values(_, []) -> 
+    [];
+tag_values(Tag, [C|R]) ->
+    E = {C#tree.name, gv(Tag, C#tree.value)},
+    [E|tag_values(Tag, R)].
+
+
 get_analyis_categories(L) when is_list(L) ->
     get_analyis_categories(hd(L));
-get_analyis_categories(AnalysisResult)  ->
-    [T || {T, _} <- AnalysisResult#tree.value ].
+get_analyis_categories(#tree{value = Values})  ->
+    [T || {T, _} <- Values ].
 
 maximum_average(RawData) ->
     lists:max([ avg_value(Value) || {_,Value} <- RawData ]).
@@ -129,6 +134,8 @@ generate_datapoint({Block,#val{max=Max, avg=Avg}}) ->
 generate_datapoint({Label, Value}) ->
     io_lib:format("{ y: ~p, z: ~p, label:\"~s\"}", [Value, Value, Label]).
 
+get_good_name(#tree{name=Dir}) ->
+    get_good_name(Dir);
 get_good_name(Dir) ->
     case lists:reverse(filename:split(Dir)) of
         ["src",  Block | _] -> Block;
