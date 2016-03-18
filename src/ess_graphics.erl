@@ -15,7 +15,7 @@ gen_res() ->
     
 t() ->
     T = get_tree(),
-    generate(T).
+    generate_all(T).
 
 do_tree(Dirs) ->
     RawChildren = [ ess:dir(P, [], "sbg_inc.conf") || P <- Dirs ],
@@ -52,9 +52,15 @@ adjust_paths(Root) ->
 add_path(Path) ->
     code:add_pathz(Path).
 
-generate(TopTree) ->
-    {Name, Data} = tag_transpose(TopTree),
-    Categories = get_analyis_categories(TopTree),
+generate_all(#tree{children=[]}) ->
+    [];
+generate_all(Tree=#tree{children=Children}) ->
+    generate(Tree),
+    [ generate_all(C) || C <- Children ].
+
+generate(Tree) ->
+    {Name, Data} = tag_transpose(Tree),
+    Categories = get_analyis_categories(Tree),
     DivIds = lists:seq(1,length(Categories)),
     generate_chart_page(Name, Categories, DivIds, Data).
 
@@ -64,13 +70,6 @@ generate_chart_page(Name, Categories, DivIds, Data) ->
     JS = generate_js_charts(Categories, DivIds, Data),
     Divs = generate_divs(DivIds),
     Table = generate_table(Divs),
-    
-    io:format("FileName:~p~n"
-              "JS:~p~n"
-              "Divs:~p~n"
-              "Table:~p~n",
-              [FileName, JS, Divs, Table]),
-
     HTML = generate_html(Table, JS),
     file:write_file(FileName, HTML).
 
