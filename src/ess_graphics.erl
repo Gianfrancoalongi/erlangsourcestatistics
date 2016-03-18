@@ -6,6 +6,9 @@
 -export([t/0, gen_res/0]).
 -define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
 
+Next step: generate html for modules too.
+
+
 gen_res() ->
     RootDir = "/local/scratch/etxpell/proj/sgc",
     adjust_paths(RootDir),
@@ -15,7 +18,8 @@ gen_res() ->
     
 t() ->
     T = get_tree(),
-    generate_all(T).
+    generate_all(T),
+    ok.
 
 do_tree(Dirs) ->
     RawChildren = [ ess:dir(P, [], "sbg_inc.conf") || P <- Dirs ],
