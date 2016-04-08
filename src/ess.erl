@@ -2,20 +2,19 @@
 -include("ess.hrl").
 -compile(export_all).
 
-
-
 find_include_dirs(Dir) ->
-    R = filelib:fold_files(Dir,".*hrl$",true,
-                           fun(F,Acc) ->
-                                   case string:str(F, "/test/") of
-                                       0 ->
-                                           [filename:dirname(F)|Acc];
-                                       _ ->
-                                           Acc
-                                   end
-                           end,
-                           []),
+    R = filelib:fold_files(Dir, ".*hrl$", true, fun add_dir_to_acc/2, []),
     lists:usort(R).
+
+add_dir_to_acc(F, Acc) ->
+    case is_dir_in_test_structure(F) of
+        true -> Acc;
+        _ -> [filename:dirname(F)|Acc]
+    end.
+
+is_dir_in_test_structure(F) ->
+    string:str(F, "/test/") /= 0.
+
 
 get_compile_include_path([]) ->
     [];
@@ -28,12 +27,12 @@ get_compile_include_path(IncFilePath) ->
 	    []
     end.
 
-dir(F) ->
-    dir(F, [], []).
-dir(F, Opts) ->
-    dir(F, Opts, []).
-dir(F, Opts, IncFile) ->
-    Tree = recursive_dir([F]),
+dir(Dir) ->
+    dir(Dir, []).
+dir(Dir, Opts) ->
+    IncDirs = find_include_dirs(Dir),
+    IncFile = [{i,IC} || IC <- IncDirs ],
+    Tree = recursive_dir([Dir]),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
     case traverse(Tree, ForEachFileFun) of
         [Res] -> Res;
@@ -86,19 +85,14 @@ get_all_files(Folder) ->
                        fun(File, AccIn) -> [File | AccIn] end, 
                        []).
 
-file(F) ->
-    file(F, [], []).
-file(F, Opts) ->
-    file(F, Opts, []).
-file(F, Opts, IncFile) ->
+file(F, Opts, IncPaths) ->
     try
         io:format("  f: ~s~n", [F]),
-        IncPath = get_compile_include_path(IncFile),
         CompileOpts = get_compile_options(),
-        {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPath),
+        {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPaths),
         {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
             beam_lib:chunks(Bin,[abstract_code]),
-        Value = [warning_metric(Warnings)|analyse(AST, Opts)]++lexical_analyse(F, Opts),
+        Value = [ warning_metric(Warnings) | analyse(AST, Opts) ]++lexical_analyse(F, Opts),
         #tree{type = file,
               name = F,
               value = sort(Value)

@@ -19,7 +19,7 @@ t() ->
     ok.
 
 do_tree(Dirs) ->
-    RawChildren = [ ess:dir(P, [], "sbg_inc.conf") || P <- Dirs ],
+    RawChildren = [ ess:dir(P, []) || P <- Dirs ],
     Children = remove_empty_trees(RawChildren),
     #tree{name="SGC-top",
           value = ess:aggregate_trees(Children),

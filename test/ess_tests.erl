@@ -203,7 +203,7 @@ analyze_function_with_recieve_after_test() ->
 
 analyze_less_simple_module_test() ->
     Name = "../test/test/file_read_test_2.erl",
-    Res = ess:file(Name),
+    Res = ess:file(Name,[],[]),
     Expected = #tree{type = file,
                      name = Name,
                      value = lists:sort([{arity, val(4,1,10,4)},
