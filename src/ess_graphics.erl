@@ -6,9 +6,6 @@
 -export([t/0, gen_res/0]).
 -define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
 
-Next step: generate html for modules too.
-
-
 gen_res() ->
     RootDir = "/local/scratch/etxpell/proj/sgc",
     adjust_paths(RootDir),
@@ -70,6 +67,7 @@ generate(Tree) ->
 
 generate_chart_page(Name, Categories, DivIds, Data) ->
     DstDir = ?RESULT_DIR,
+    filelib:ensure_dir(DstDir),
     FileName = filename:join(DstDir, Name++"_analysis")++".html",
     JS = generate_js_charts(Categories, DivIds, Data),
     Divs = generate_divs(DivIds),

@@ -2,6 +2,21 @@
 -include("ess.hrl").
 -compile(export_all).
 
+
+
+find_include_dirs(Dir) ->
+    R = filelib:fold_files(Dir,".*hrl$",true,
+                           fun(F,Acc) ->
+                                   case string:str(F, "/test/") of
+                                       0 ->
+                                           [filename:dirname(F)|Acc];
+                                       _ ->
+                                           Acc
+                                   end
+                           end,
+                           []),
+    lists:usort(R).
+
 get_compile_include_path([]) ->
     [];
 get_compile_include_path(IncFilePath) ->
