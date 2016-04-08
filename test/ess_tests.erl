@@ -509,6 +509,36 @@ blank_lines_test() ->
     Expected = 2,
     ?assertEqual(Expected, Res).
 
+build_tree_1_test() ->
+    Dirs = ["a"],
+    Res = ess:make_tree(Dirs),
+    ?assertEqual([#tree{name="a",children=[]}], Res).
+
+build_tree_2_test() ->
+    Dirs = ["a", "b"],
+    Res = ess:make_tree(Dirs),
+    Expected = [#tree{name="a",children=[]},
+                #tree{name="b",children=[]}],
+    ?assertEqual(Expected, Res).
+
+build_tree_3_test() ->
+    Dirs = ["a/b", "a/c"],
+    Res = ess:make_tree(Dirs),
+    Expected = [#tree{name="a",children=[#tree{name="b"}, 
+                                         #tree{name="c"}]}],
+
+    ?assertEqual(Expected, Res).
+
+build_tree_4_test() ->
+    Dirs = ["a/b", "a/c", "d/e"],
+    Res = ess:make_tree(Dirs),
+    Expected = [#tree{name="a",children=[#tree{name="b"}, 
+                                         #tree{name="c"}]},
+                #tree{name="d",children=[#tree{name="e"}]}],
+    ?assertEqual(Expected, Res).
+
+
+
 func_1() ->    
     "%% another comment 
 f() -> receive hej -> 2+33 
@@ -540,5 +570,3 @@ debug(X) ->
 
 gv(Key, L) ->
     proplists:get_value(Key, L).
-
-

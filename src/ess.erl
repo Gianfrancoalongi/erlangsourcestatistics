@@ -2,6 +2,33 @@
 -include("ess.hrl").
 -compile(export_all).
 
+build tree with structure (from src dirs), then fill it with values
+
+make_tree(Dirs) ->
+    R = [filename:split(D) || D <- Dirs],
+    mt(R).
+
+mt(R=[[H|_]|_]) ->
+    {StartsOnHd, Others} = partition_on_hd(H, R),
+    NewR = lop_off_hd(StartsOnHd),
+    Res = #tree{name=H,
+                children = mt(NewR),
+                value=[]},
+    [Res|mt(Others)];
+mt(_) ->
+    [].
+
+partition_on_hd(H, L) ->
+    lists:partition(fun([ H1|_ ]) when H1==H -> true;
+                       (_) -> false end, L).
+
+lop_off_hd(L) ->
+    [ tl(D) || D <- L ].
+
+find_src_dirs(Dir) ->
+    R = filelib:fold_files(Dir, ".*erl$", true, fun add_dir_to_acc/2, []),
+    lists:usort(R).
+
 find_include_dirs(Dir) ->
     R = filelib:fold_files(Dir, ".*hrl$", true, fun add_dir_to_acc/2, []),
     lists:usort(R).
@@ -15,7 +42,6 @@ add_dir_to_acc(F, Acc) ->
 is_dir_in_test_structure(F) ->
     string:str(F, "/test/") /= 0.
 
-
 get_compile_include_path([]) ->
     [];
 get_compile_include_path(IncFilePath) ->
@@ -27,10 +53,19 @@ get_compile_include_path(IncFilePath) ->
 	    []
     end.
 
+filter_blacklist(Dirs, _) ->
+    Strings = ["/comte/", "/lib/", "/old_preuplift/", "/bt_support/"],
+    lists:filter(fun(D) -> not contain_strings(Strings, D) end, Dirs).
+
+contain_strings(Strings, F) ->
+    lists:sum([ string:str(F, S) || S <- Strings ]) /= 0.
+
 dir(Dir) ->
     dir(Dir, []).
 dir(Dir, Opts) ->
     IncDirs = find_include_dirs(Dir),
+    SrcDirs1 = find_src_dirs(Dir),
+    SrcDirs = filter_blacklist(SrcDirs1, Opts),
     IncFile = [{i,IC} || IC <- IncDirs ],
     Tree = recursive_dir([Dir]),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
