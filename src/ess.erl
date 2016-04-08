@@ -2,7 +2,7 @@
 -include("ess.hrl").
 -compile(export_all).
 
-build tree with structure (from src dirs), then fill it with values
+%%build tree with structure (from src dirs), then fill it with values
 
 make_tree(Dirs) ->
     R = [filename:split(D) || D <- Dirs],
@@ -40,7 +40,101 @@ add_dir_to_acc(F, Acc) ->
     end.
 
 is_dir_in_test_structure(F) ->
-    string:str(F, "/test/") /= 0.
+    string:str(F, "/test") /= 0.
+
+%% before opt
+%% 8> f(T),{T, _} = timer:tc(ess,find_src_dirs, ["../../sgc/"]), T.
+%% 555758
+%% 623760
+%% 619168
+%% 582999
+%% 588092
+%% ---
+%% after opt
+%% 30> f(T),{T, _} = timer:tc(ess,find_files, ["../../sgc/"]), T.   
+%% 372489
+%% 430726
+%% 371713
+%% 437567
+%% 470477
+%%
+%% header file directories:
+%% 43> f(T),{T, _} = timer:tc(ess,find_include_dirs, ["../../sgc/"]), T.
+%% 510357
+%% 566307
+%% 646078
+%% 538228
+%% 491677
+%%
+%% after opt
+%% 43> f(T),{T, _} = timer:tc(ess,find_hrl_dirs, ["../../sgc/"]), T.
+%% 416891
+%% 364281
+%% 390436
+%% 391850
+%% 390107
+
+
+list_dir_full_names(Dir) ->
+    case file:list_dir(Dir) of
+        {ok, Fs} -> mk_fullnames(Dir, Fs);
+        _ -> []
+    end.
+
+mk_fullnames(Dir, Fs) ->
+    [ filename:join(Dir, F) || F <- Fs ].
+
+find_hrl_dirs(Dir) ->
+    Fs = list_dir_full_names(Dir),
+    IncFiles = files_ending_in_hrl(Fs),
+    SubDirs = find_hrl_in_subdirs(subdirs(Fs)),
+    case IncFiles of
+        [] -> SubDirs;
+        _ -> [Dir | SubDirs]
+    end.
+
+find_hrl_in_subdirs(Dirs) ->
+    lists:concat([ find_hrl_dirs(D) || D <- Dirs ]).
+
+find_files(Dir) ->
+    Fs = list_dir_full_names(Dir),
+    SrcFiles = files_ending_in_erl(Fs),
+    SubDirs = find_in_subdirs(subdirs(Fs)),
+    {Dir, SrcFiles, prune_empties(SubDirs)}.
+
+find_in_subdirs(Dirs) ->
+    [ find_files(D) || D <- Dirs ].
+
+prune_empties(L) ->
+    lists:filter(fun is_not_empty/1, L).
+
+is_not_empty({_, [], []}) -> false;
+is_not_empty(_) -> true.
+
+subdirs(Fs) ->
+    lists:filter(fun is_valid_dir/1, Fs).
+
+is_valid_dir(D) ->
+    filelib:is_dir(D) andalso
+        not is_dir_in_test_structure(D) andalso
+        not is_dot_git(D) andalso
+        not is_eunit(D).
+
+files_ending_in_erl(Fs) ->
+    lists:filter(fun is_erlang_source_file/1, Fs).
+
+files_ending_in_hrl(Fs) ->
+    lists:filter(fun is_erlang_header_file/1, Fs).
+
+is_dot_git(F) ->
+    is_string_in_name(F, "/.git/").
+
+is_eunit(F) ->
+    is_string_in_name(F, "/.eunit").
+
+is_string_in_name(Name, String) ->
+    string:str(Name, String) /= 0.
+
 
 get_compile_include_path([]) ->
     [];
@@ -114,6 +208,9 @@ recursive_dir([Dir|R]) ->
 
 is_erlang_source_file(F) ->
     filename:extension(F) == ".erl".
+
+is_erlang_header_file(F) ->
+    filename:extension(F) == ".hrl".
 
 get_all_files(Folder) ->
     filelib:fold_files(Folder, ".*.erl$", true, 
