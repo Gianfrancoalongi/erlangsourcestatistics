@@ -40,7 +40,11 @@ add_dir_to_acc(F, Acc) ->
     end.
 
 is_dir_in_test_structure(F) ->
-    string:str(F, "/test") /= 0.
+    %%    string:str(F, "/test") /= 0.
+    case rev(F) of
+        "tset"++_ -> true;
+        _ -> false
+    end.
 
 %% before opt
 %% 8> f(T),{T, _} = timer:tc(ess,find_src_dirs, ["../../sgc/"]), T.

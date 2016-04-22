@@ -202,7 +202,7 @@ analyze_function_with_recieve_after_test() ->
     ?assertEqual(Expected, Res).
 
 analyze_less_simple_module_test() ->
-    Name = "../test/test/file_read_test_2.erl",
+    Name = "../test/test_dir/file_read_test_2.erl",
     Res = ess:file(Name,[],[]),
     Expected = #tree{type = file,
                      name = Name,
@@ -409,7 +409,8 @@ get_all_files_test() ->
     ?assertEqual(L, lists:sort(Res)).
 
 analyze_directory_test() ->
-    Res = ess:dir("../test/test/test_dir/"),
+    Dir = "../test/test_dir/test_dir",
+    Res = ess:dir(Dir),
 
     AggregateValues = lists:sort([{warnings, val(0,0,0,2)},
                                   {arity,val(2,1,3,2)},
@@ -426,7 +427,7 @@ analyze_directory_test() ->
                                   {line_lengths, val(25,0,139,11)}
                                  ]),
     ValuesForA = #tree{type = file,
-                       name = "../test/test/test_dir/a.erl",
+                       name = filename:join(Dir, "a.erl"),
 		       value = lists:sort([{warnings, 0},
                                            {arity,val(1,1,1,1)},
 					   {clauses,val(1,1,1,1)},
@@ -442,7 +443,7 @@ analyze_directory_test() ->
                                            {line_lengths, val(22, 0, 67, 5)}])},
     
     ValuesForB = #tree{type = file,
-                       name = "../test/test/test_dir/b.erl",
+                       name = filename:join(Dir, "b.erl"),
 		       value = lists:sort([{warnings, 0},
                                            {arity,val(2,2,2,1)},
 					   {clauses,val(1,1,1,1)},
@@ -457,13 +458,13 @@ analyze_directory_test() ->
 					   {variable_steppings,val(1,1,1,1)},
                                            {line_lengths, val(25, 0, 72, 6)}])},
     Expected = #tree{type = dir,
-                     name = "../test/test/test_dir/",
+                     name = Dir,
                      value = AggregateValues,
                      children = [ValuesForA, ValuesForB]},
     ?assertMatch(Expected, Res).
 
 analyze_deep_directory_test() ->
-    Dir = "../test/test",
+    Dir = "../test/test_dir",
     Res = ess:dir(Dir),
     AggregateValues = lists:sort([{arity,val(4,0,13,8)},
                                   {clauses,val(3,1,11,8)},
@@ -479,7 +480,6 @@ analyze_deep_directory_test() ->
                                   {warnings, val(1,0,2,4)},
                                   {line_lengths, val(27,0,524,48)}
                                  ]),
-    debug(Res),
     ?assertMatch(#tree{type = dir,
                        name = Dir,
                        value = AggregateValues}, 
@@ -487,13 +487,13 @@ analyze_deep_directory_test() ->
 
 
 recurse_deep_directory_test() ->
-    Res = ess:recursive_dir(["../test/test/"]),
-    Expected = [{"../test/test/",
-		 ["../test/test/file_read_test_2.erl",
-		  "../test/test/file_read_test.erl"],
-		 [{"../test/test/test_dir",
-		   ["../test/test/test_dir/a.erl",
-		    "../test/test/test_dir/b.erl"],
+    Res = ess:recursive_dir(["../test/test_dir/"]),
+    Expected = [{"../test/test_dir/",
+		 ["../test/test_dir/file_read_test_2.erl",
+		  "../test/test_dir/file_read_test.erl"],
+		 [{"../test/test_dir/test_dir",
+		   ["../test/test_dir/test_dir/a.erl",
+		    "../test/test_dir/test_dir/b.erl"],
 		   []}
 		 ]}],
     ?assertMatch(Expected, Res).
