@@ -92,6 +92,7 @@ structural_complexity_test_cases() ->
      {"base float", "f() -> 3.14.", 0,  structural_complexity},
      {"base atom", "f() -> ok.", 0,  structural_complexity},
      {"base var", "f() -> A.", 0,  structural_complexity},
+     {"base char", "f() -> $w.", 0,  structural_complexity},
      {"base string", "f() -> \"hej\".", 0,  structural_complexity},
      {"base bin", "f() -> << \"hej\" >>.", 1,  structural_complexity},
      {"base bin 2", "f() -> << A, B/binary >>.", 1,  structural_complexity},
@@ -493,6 +494,12 @@ find_files_test() ->
                   []}
                 ]},
     ?assertMatch(Expected, Res).
+
+dont_look_in_test_structure_test() ->
+    Dir = "../test/test_dir/dir_walk_test",
+    Res = ess:find_hrl_dirs(Dir),
+    Expected = [filename:join(Dir, "test_includes")],
+    ?assertEqual(Expected, Res).
 
 comments_test() ->
     Str = func_1(),
