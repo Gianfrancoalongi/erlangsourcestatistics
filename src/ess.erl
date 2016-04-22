@@ -32,39 +32,6 @@ is_dir_in_test_structure(F) ->
         _ -> false
     end.
 
-%% before opt
-%% 8> f(T),{T, _} = timer:tc(ess,find_src_dirs, ["../../sgc/"]), T.
-%% 555758
-%% 623760
-%% 619168
-%% 582999
-%% 588092
-%% ---
-%% after opt
-%% 30> f(T),{T, _} = timer:tc(ess,find_files, ["../../sgc/"]), T.   
-%% 372489
-%% 430726
-%% 371713
-%% 437567
-%% 470477
-%%
-%% header file directories:
-%% 43> f(T),{T, _} = timer:tc(ess,find_include_dirs, ["../../sgc/"]), T.
-%% 510357
-%% 566307
-%% 646078
-%% 538228
-%% 491677
-%%
-%% after opt
-%% 43> f(T),{T, _} = timer:tc(ess,find_hrl_dirs, ["../../sgc/"]), T.
-%% 416891
-%% 364281
-%% 390436
-%% 391850
-%% 390107
-
-
 list_dir_full_names(Dir) ->
     case file:list_dir(Dir) of
         {ok, Fs} -> mk_fullnames(Dir, Fs);
