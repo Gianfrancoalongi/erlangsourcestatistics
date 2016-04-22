@@ -7,15 +7,14 @@
 -define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
 
 gen_res() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc",
-    adjust_paths(RootDir),
-    
+    RootDir = "/local/scratch/etxpell/proj/sgc/src",
+    adjust_paths(RootDir),    
     SGC = do_tree(RootDir),
     file:write_file("./res.data", term_to_binary(SGC)).
     
 t() ->
     T = get_tree(),
-    generate_all(T),
+    generate_all(T#tree{name="TOP"}),
     ok.
 
 do_tree(Dir) ->
@@ -48,7 +47,7 @@ syf_blocks() ->
       pmf, pms, rcm, sbm, "sctp/sctp_erl", sip, smm, swm, "sys/sys_erl" ].
         
 adjust_paths(Root) ->
-    EcopDir = filename:join(Root, "src/syf/ecop/out"),
+    EcopDir = filename:join(Root, "syf/ecop/out"),
     add_path(EcopDir).
 
 add_path(Path) ->
