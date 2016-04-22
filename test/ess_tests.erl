@@ -479,6 +479,7 @@ analyze_deep_directory_test() ->
                                   {warnings, val(1,0,2,4)},
                                   {line_lengths, val(27,0,524,48)}
                                  ]),
+    debug(Res),
     ?assertMatch(#tree{type = dir,
                        name = Dir,
                        value = AggregateValues}, 

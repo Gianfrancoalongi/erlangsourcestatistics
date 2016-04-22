@@ -157,29 +157,24 @@ contain_strings(Strings, F) ->
 dir(Dir) ->
     dir(Dir, []).
 dir(Dir, Opts) ->
-    IncDirs = find_include_dirs(Dir),
-    SrcDirs1 = find_src_dirs(Dir),
-    SrcDirs = filter_blacklist(SrcDirs1, Opts),
+    IncDirs = find_hrl_dirs(Dir),
+    %% SrcDirs1 = find_src_dirs(Dir),
+    %% SrcDirs = filter_blacklist(SrcDirs1, Opts),
     IncFile = [{i,IC} || IC <- IncDirs ],
-    Tree = recursive_dir([Dir]),
+    Tree = find_files(Dir),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
-    case traverse(Tree, ForEachFileFun) of
-        [Res] -> Res;
-        _ -> []
-    end.
+    traverse(Tree, ForEachFileFun).
 
+traverse_list(L, Fun) when is_list(L) ->
+    [ traverse(T, Fun) || T <- L ].
 
-traverse([{Dir,Files,SubDirs}|R], Fun) ->
-    Stats = for_each_file(Files, Fun) ++ traverse(SubDirs, Fun),
+traverse({Dir,Files,SubDirs}, Fun) ->
+    Stats = for_each_file(Files, Fun) ++ traverse_list(SubDirs, Fun),
     Aggregated = aggregate_trees(Stats),
-    Res = #tree{type = dir,
-                name = Dir,
-                value = sort(Aggregated),
-                children = Stats},
-    [ Res | traverse(R, Fun) ];
-
-traverse([], _Fun) ->
-    [].
+    #tree{type = dir,
+          name = Dir,
+          value = sort(Aggregated),
+          children = Stats}.
 
 for_each_file(Files, Fun) ->
     [ Fun(File) || File <- Files ].
