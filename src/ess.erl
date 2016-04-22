@@ -25,20 +25,6 @@ partition_on_hd(H, L) ->
 lop_off_hd(L) ->
     [ tl(D) || D <- L ].
 
-find_src_dirs(Dir) ->
-    R = filelib:fold_files(Dir, ".*erl$", true, fun add_dir_to_acc/2, []),
-    lists:usort(R).
-
-find_include_dirs(Dir) ->
-    R = filelib:fold_files(Dir, ".*hrl$", true, fun add_dir_to_acc/2, []),
-    lists:usort(R).
-
-add_dir_to_acc(F, Acc) ->
-    case is_dir_in_test_structure(F) of
-        true -> Acc;
-        _ -> [filename:dirname(F)|Acc]
-    end.
-
 is_dir_in_test_structure(F) ->
     %%    string:str(F, "/test") /= 0.
     case rev(F) of
@@ -139,25 +125,6 @@ is_eunit(F) ->
 is_string_in_name(Name, String) ->
     string:str(Name, String) /= 0.
 
-
-get_compile_include_path([]) ->
-    [];
-get_compile_include_path(IncFilePath) ->
-    case file:read_file(IncFilePath) of
-        {ok, Data} ->
-	    Lines = binary:split(Data, [<<"\n">>], [global]),
-	    [{i, binary_to_list(Line)} || Line <- Lines, Line =/= <<>>];
-	_ ->
-	    []
-    end.
-
-filter_blacklist(Dirs, _) ->
-    Strings = ["/comte/", "/lib/", "/old_preuplift/", "/bt_support/"],
-    lists:filter(fun(D) -> not contain_strings(Strings, D) end, Dirs).
-
-contain_strings(Strings, F) ->
-    lists:sum([ string:str(F, S) || S <- Strings ]) /= 0.
-
 dir(Dir) ->
     dir(Dir, []).
 dir(Dir, Opts) ->
@@ -182,28 +149,6 @@ traverse({Dir,Files,SubDirs}, Fun) ->
 
 for_each_file(Files, Fun) ->
     [ Fun(File) || File <- Files ].
-
-recursive_dir([]) -> 
-    [];
-recursive_dir([Dir|R]) ->
-    case file:list_dir(Dir) of
-        {ok, Files} ->
-            FullNames = [ filename:join(Dir,F) || F <- Files ],
-            DirFiles = [ F || F <- FullNames, not filelib:is_dir(F), 
-                              is_erlang_source_file(F) ],
-            Dirs = [ F || F <- FullNames, filelib:is_dir(F) ],
-            RecursiveStuff = recursive_dir(Dirs),
-            Res = case {DirFiles, RecursiveStuff} of
-                      {[], []} ->
-                          [];
-                      _ -> 
-                          [{Dir, DirFiles, recursive_dir(Dirs)}]
-                  end,
-            Res  ++ recursive_dir(R);
-        Err ->
-            io:format("error reading dir: ~s~n", [Dir]),
-            recursive_dir(R)
-    end.
 
 is_erlang_source_file(F) ->
     filename:extension(F) == ".erl".

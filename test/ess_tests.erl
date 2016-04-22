@@ -393,15 +393,11 @@ aggregate_values_three_agg_test() ->
     ?assertEqual(Expected, Res).
 
     
-
-
-get_compile_include_path_test() ->
-    Res = ess:get_compile_include_path("../test/sbg_inc.conf"),
-    L = [{i, "/local/scratch/ejunyin/proj/sgc/src/sgc/reg/include"},
-         {i, "/local/scratch/ejunyin/proj/sgc/src/syf/ccpc/include/"},
-         {i, "/local/scratch/ejunyin/proj/sgc/src/syf/sys/sys_erl/include/"},
-         {i, "/local/scratch/ejunyin/proj/sgc/src/syf/sip/include/"}],
-    ?assertEqual(L, Res).   
+find_hrl_dirs_test() ->
+    Dir = "../test/test_dir/",
+    Res = ess:find_hrl_dirs(Dir),
+    Expected = [filename:join(Dir, "test_includes")],
+    ?assertEqual(Expected, Res).
 
 get_all_files_test() ->
     Res = ess:get_all_files("../src/"),
@@ -486,16 +482,16 @@ analyze_deep_directory_test() ->
                  Res).
 
 
-recurse_deep_directory_test() ->
-    Res = ess:recursive_dir(["../test/test_dir/"]),
-    Expected = [{"../test/test_dir/",
-		 ["../test/test_dir/file_read_test_2.erl",
-		  "../test/test_dir/file_read_test.erl"],
-		 [{"../test/test_dir/test_dir",
-		   ["../test/test_dir/test_dir/a.erl",
-		    "../test/test_dir/test_dir/b.erl"],
-		   []}
-		 ]}],
+find_files_test() ->
+    Res = ess:find_files("../test/test_dir/"),
+    Expected = {"../test/test_dir/",
+                ["../test/test_dir/file_read_test_2.erl",
+                 "../test/test_dir/file_read_test.erl"],
+                [{"../test/test_dir/test_dir",
+                  ["../test/test_dir/test_dir/a.erl",
+                   "../test/test_dir/test_dir/b.erl"],
+                  []}
+                ]},
     ?assertMatch(Expected, Res).
 
 comments_test() ->
