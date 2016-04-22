@@ -29,7 +29,8 @@ is_dir_in_test_structure(F) ->
     %%    string:str(F, "/test") /= 0.
     case rev(F) of
         "tset"++_ -> true;
-        _ -> false
+        _ -> is_string_in_name(F, "/ft/") orelse
+                 is_string_in_name(F, "/st/")
     end.
 
 list_dir_full_names(Dir) ->
@@ -44,7 +45,7 @@ mk_fullnames(Dir, Fs) ->
 find_hrl_dirs(Dir) ->
     Fs = list_dir_full_names(Dir),
     IncFiles = files_ending_in_hrl(Fs),
-    SubDirs = find_hrl_in_subdirs(subdirs(Fs)),
+    SubDirs = find_hrl_in_subdirs(subdirs_hrl(Fs)),
     case IncFiles of
         [] -> SubDirs;
         _ -> [Dir | SubDirs]
@@ -56,7 +57,7 @@ find_hrl_in_subdirs(Dirs) ->
 find_files(Dir) ->
     Fs = list_dir_full_names(Dir),
     SrcFiles = files_ending_in_erl(Fs),
-    SubDirs = find_in_subdirs(subdirs(Fs)),
+    SubDirs = find_in_subdirs(subdirs_src(Fs)),
     {Dir, SrcFiles, prune_empties(SubDirs)}.
 
 find_in_subdirs(Dirs) ->
@@ -68,14 +69,24 @@ prune_empties(L) ->
 is_not_empty({_, [], []}) -> false;
 is_not_empty(_) -> true.
 
-subdirs(Fs) ->
-    lists:filter(fun is_valid_dir/1, Fs).
+subdirs_src(Fs) ->
+    lists:filter(fun is_valid_src_dir/1, Fs).
 
-is_valid_dir(D) ->
+subdirs_hrl(Fs) ->
+    lists:filter(fun is_valid_hrl_dir/1, Fs).
+
+is_valid_src_dir(D) ->
     filelib:is_dir(D) andalso
-        not is_dir_in_test_structure(D) andalso
-        not is_dot_git(D) andalso
-        not is_eunit(D).
+        not (is_dir_in_test_structure(D) orelse
+             is_dot_git(D) orelse
+             is_eunit(D) orelse
+             is_sgc_no_walk_dir(D)).
+
+is_valid_hrl_dir(D) ->
+    filelib:is_dir(D) andalso
+        not (is_dir_in_test_structure(D) orelse
+             is_dot_git(D) orelse
+             is_eunit(D) ).
 
 files_ending_in_erl(Fs) ->
     lists:filter(fun is_erlang_source_file/1, Fs).
@@ -89,6 +100,14 @@ is_dot_git(F) ->
 is_eunit(F) ->
     is_string_in_name(F, "/.eunit").
 
+is_sgc_no_walk_dir(F) ->
+    (is_string_in_name(F, "/workspace") orelse
+     is_string_in_name(F, "/tools") orelse
+     is_string_in_name(F, "/out") orelse
+     is_string_in_name(F, "/deps") orelse
+     is_string_in_name(F, "/comte") orelse
+     is_string_in_name(F, "/build") ).
+
 is_string_in_name(Name, String) ->
     string:str(Name, String) /= 0.
 
@@ -96,8 +115,6 @@ dir(Dir) ->
     dir(Dir, []).
 dir(Dir, Opts) ->
     IncDirs = find_hrl_dirs(Dir),
-    %% SrcDirs1 = find_src_dirs(Dir),
-    %% SrcDirs = filter_blacklist(SrcDirs1, Opts),
     IncFile = [{i,IC} || IC <- IncDirs ],
     Tree = find_files(Dir),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,

@@ -397,7 +397,9 @@ aggregate_values_three_agg_test() ->
 find_hrl_dirs_test() ->
     Dir = "../test/test_dir/",
     Res = ess:find_hrl_dirs(Dir),
-    Expected = [filename:join(Dir, "test_includes")],
+    Expected = lists:sort([filename:join(Dir, "test_includes"),
+                           filename:join([Dir, "dir_walk_testing","test_includes"])
+                          ]),
     ?assertEqual(Expected, Res).
 
 get_all_files_test() ->
@@ -496,7 +498,7 @@ find_files_test() ->
     ?assertMatch(Expected, Res).
 
 dont_look_in_test_structure_test() ->
-    Dir = "../test/test_dir/dir_walk_test",
+    Dir = "../test/test_dir/dir_walk_testing",
     Res = ess:find_hrl_dirs(Dir),
     Expected = [filename:join(Dir, "test_includes")],
     ?assertEqual(Expected, Res).

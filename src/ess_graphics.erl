@@ -10,7 +10,7 @@ gen_res() ->
     RootDir = "/local/scratch/etxpell/proj/sgc",
     adjust_paths(RootDir),
     
-    SGC = do_tree(sgc_dirs(RootDir) ++ syf_dirs(RootDir)),
+    SGC = do_tree(RootDir),
     file:write_file("./res.data", term_to_binary(SGC)).
     
 t() ->
@@ -18,12 +18,13 @@ t() ->
     generate_all(T),
     ok.
 
-do_tree(Dirs) ->
-    RawChildren = [ ess:dir(P, []) || P <- Dirs ],
-    Children = remove_empty_trees(RawChildren),
-    #tree{name="SGC-top",
-          value = ess:aggregate_trees(Children),
-          children = Children}.
+do_tree(Dir) ->
+    ess:dir(Dir, []).
+    %% RawChildren = ess:dir(Dir, []),
+    %% Children = remove_empty_trees(RawChildren),
+    %% #tree{name=Dir,
+    %%       value = ess:aggregate_trees(Children),
+    %%       children = Children}.
 
 get_tree() ->
     {ok,Bin}  = file:read_file("./res.data"),
