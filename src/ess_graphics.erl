@@ -7,23 +7,23 @@
 -define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
 
 gen_res() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc",
-    adjust_paths(RootDir),
-    
-    SGC = do_tree(sgc_dirs(RootDir) ++ syf_dirs(RootDir)),
+    RootDir = "/local/scratch/etxpell/proj/sgc/src",
+    adjust_paths(RootDir),    
+    SGC = do_tree(RootDir),
     file:write_file("./res.data", term_to_binary(SGC)).
     
 t() ->
     T = get_tree(),
-    generate_all(T),
+    generate_all(T#tree{name="TOP"}),
     ok.
 
-do_tree(Dirs) ->
-    RawChildren = [ ess:dir(P, []) || P <- Dirs ],
-    Children = remove_empty_trees(RawChildren),
-    #tree{name="SGC-top",
-          value = ess:aggregate_trees(Children),
-          children = Children}.
+do_tree(Dir) ->
+    ess:dir(Dir, []).
+    %% RawChildren = ess:dir(Dir, []),
+    %% Children = remove_empty_trees(RawChildren),
+    %% #tree{name=Dir,
+    %%       value = ess:aggregate_trees(Children),
+    %%       children = Children}.
 
 get_tree() ->
     {ok,Bin}  = file:read_file("./res.data"),
@@ -47,7 +47,7 @@ syf_blocks() ->
       pmf, pms, rcm, sbm, "sctp/sctp_erl", sip, smm, swm, "sys/sys_erl" ].
         
 adjust_paths(Root) ->
-    EcopDir = filename:join(Root, "src/syf/ecop/out"),
+    EcopDir = filename:join(Root, "syf/ecop/out"),
     add_path(EcopDir).
 
 add_path(Path) ->

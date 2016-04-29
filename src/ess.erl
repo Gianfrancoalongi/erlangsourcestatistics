@@ -2,7 +2,7 @@
 -include("ess.hrl").
 -compile(export_all).
 
-build tree with structure (from src dirs), then fill it with values
+%%build tree with structure (from src dirs), then fill it with values
 
 make_tree(Dirs) ->
     R = [filename:split(D) || D <- Dirs],
@@ -25,95 +25,130 @@ partition_on_hd(H, L) ->
 lop_off_hd(L) ->
     [ tl(D) || D <- L ].
 
-find_src_dirs(Dir) ->
-    R = filelib:fold_files(Dir, ".*erl$", true, fun add_dir_to_acc/2, []),
-    lists:usort(R).
-
-find_include_dirs(Dir) ->
-    R = filelib:fold_files(Dir, ".*hrl$", true, fun add_dir_to_acc/2, []),
-    lists:usort(R).
-
-add_dir_to_acc(F, Acc) ->
-    case is_dir_in_test_structure(F) of
-        true -> Acc;
-        _ -> [filename:dirname(F)|Acc]
-    end.
-
 is_dir_in_test_structure(F) ->
-    string:str(F, "/test/") /= 0.
-
-get_compile_include_path([]) ->
-    [];
-get_compile_include_path(IncFilePath) ->
-    case file:read_file(IncFilePath) of
-        {ok, Data} ->
-	    Lines = binary:split(Data, [<<"\n">>], [global]),
-	    [{i, binary_to_list(Line)} || Line <- Lines, Line =/= <<>>];
-	_ ->
-	    []
+    %%    string:str(F, "/test") /= 0.
+    case rev(F) of
+        "tset"++_ -> true;
+        _ -> is_string_in_name(F, "/ft/") orelse
+                 is_string_in_name(F, "/st/")
     end.
 
-filter_blacklist(Dirs, _) ->
-    Strings = ["/comte/", "/lib/", "/old_preuplift/", "/bt_support/"],
-    lists:filter(fun(D) -> not contain_strings(Strings, D) end, Dirs).
+list_dir_full_names(Dir) ->
+    case file:list_dir(Dir) of
+        {ok, Fs} -> mk_fullnames(Dir, Fs);
+        _ -> []
+    end.
 
-contain_strings(Strings, F) ->
-    lists:sum([ string:str(F, S) || S <- Strings ]) /= 0.
+mk_fullnames(Dir, Fs) ->
+    [ filename:join(Dir, F) || F <- Fs ].
+
+find_hrl_dirs(Dir) ->
+    Fs = list_dir_full_names(Dir),
+    IncFiles = files_ending_in_hrl(Fs),
+    SubDirs = find_hrl_in_subdirs(subdirs_hrl(Fs)),
+    case IncFiles of
+        [] -> SubDirs;
+        _ -> [Dir | SubDirs]
+    end.
+
+find_hrl_in_subdirs(Dirs) ->
+    lists:concat([ find_hrl_dirs(D) || D <- Dirs ]).
+
+find_files(Dir) ->
+    Fs = list_dir_full_names(Dir),
+    SrcFiles = files_ending_in_erl(Fs),
+    SubDirs = find_in_subdirs(subdirs_src(Fs)),
+    {Dir, SrcFiles, prune_empties(SubDirs)}.
+
+find_in_subdirs(Dirs) ->
+    [ find_files(D) || D <- Dirs ].
+
+prune_empties(L) ->
+    lists:filter(fun is_not_empty/1, L).
+
+is_not_empty({_, [], []}) -> false;
+is_not_empty(_) -> true.
+
+subdirs_src(Fs) ->
+    lists:filter(fun is_valid_src_dir/1, Fs).
+
+subdirs_hrl(Fs) ->
+    lists:filter(fun is_valid_hrl_dir/1, Fs).
+
+is_valid_src_dir(D) ->
+    filelib:is_dir(D) andalso
+        not (is_dir_in_test_structure(D) orelse
+             is_dot_git(D) orelse
+             is_eunit(D) orelse
+             is_sgc_no_walk_dir(D)).
+
+is_valid_hrl_dir(D) ->
+    filelib:is_dir(D) andalso
+        not (is_dir_in_test_structure(D) orelse
+             is_dot_git(D) orelse
+             is_eunit(D) ).
+
+files_ending_in_erl(Fs) ->
+    lists:filter(fun is_erlang_source_file/1, Fs).
+
+files_ending_in_hrl(Fs) ->
+    lists:filter(fun is_erlang_header_file/1, Fs).
+
+is_dot_git(F) ->
+    is_string_in_name(F, "/.git/").
+
+is_eunit(F) ->
+    is_string_in_name(F, "/.eunit").
+
+is_sgc_no_walk_dir(F) ->
+    (is_string_in_name(F, "/workspace") orelse
+     is_string_in_name(F, "/tools") orelse
+     is_string_in_name(F, "/out") orelse
+     is_string_in_name(F, "/deps") orelse
+     is_string_in_name(F, "/comte") orelse
+     is_string_in_name(F, "/build") ).
+
+is_string_in_name(Name, String) ->
+    string:str(Name, String) /= 0.
 
 dir(Dir) ->
     dir(Dir, []).
 dir(Dir, Opts) ->
-    IncDirs = find_include_dirs(Dir),
-    SrcDirs1 = find_src_dirs(Dir),
-    SrcDirs = filter_blacklist(SrcDirs1, Opts),
+    IncDirs =   sgc_extra_hrls() ++ find_hrl_dirs(Dir),
     IncFile = [{i,IC} || IC <- IncDirs ],
-    Tree = recursive_dir([Dir]),
+    Tree = find_files(Dir),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
-    case traverse(Tree, ForEachFileFun) of
-        [Res] -> Res;
-        _ -> []
-    end.
+    traverse(Tree, ForEachFileFun).
 
+sgc_extra_hrls() ->
+    {ok,Bin} = file:read_file("/tmp/sbg_inc.conf"),
+    binary_to_term(Bin) ++ 
+    ["/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/diameter-0/include/",
+     "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/megaco-3.17.0.2/include/",
+     "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/xmerl-1.3.6/include/",
+     "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/stdlib-1.19.4/include/",
+     "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/public_key-0.21/include/",
+     "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/ssl-5.3.3/src/"].
 
-traverse([{Dir,Files,SubDirs}|R], Fun) ->
-    Stats = for_each_file(Files, Fun) ++ traverse(SubDirs, Fun),
+traverse_list(L, Fun) when is_list(L) ->
+    [ traverse(T, Fun) || T <- L ].
+
+traverse({Dir,Files,SubDirs}, Fun) ->
+    Stats = for_each_file(Files, Fun) ++ traverse_list(SubDirs, Fun),
     Aggregated = aggregate_trees(Stats),
-    Res = #tree{type = dir,
-                name = Dir,
-                value = sort(Aggregated),
-                children = Stats},
-    [ Res | traverse(R, Fun) ];
-
-traverse([], _Fun) ->
-    [].
+    #tree{type = dir,
+          name = Dir,
+          value = sort(Aggregated),
+          children = Stats}.
 
 for_each_file(Files, Fun) ->
     [ Fun(File) || File <- Files ].
 
-recursive_dir([]) -> 
-    [];
-recursive_dir([Dir|R]) ->
-    case file:list_dir(Dir) of
-        {ok, Files} ->
-            FullNames = [ filename:join(Dir,F) || F <- Files ],
-            DirFiles = [ F || F <- FullNames, not filelib:is_dir(F), 
-                              is_erlang_source_file(F) ],
-            Dirs = [ F || F <- FullNames, filelib:is_dir(F) ],
-            RecursiveStuff = recursive_dir(Dirs),
-            Res = case {DirFiles, RecursiveStuff} of
-                      {[], []} ->
-                          [];
-                      _ -> 
-                          [{Dir, DirFiles, recursive_dir(Dirs)}]
-                  end,
-            Res  ++ recursive_dir(R);
-        Err ->
-            io:format("error reading dir: ~s~n", [Dir]),
-            recursive_dir(R)
-    end.
-
 is_erlang_source_file(F) ->
     filename:extension(F) == ".erl".
+
+is_erlang_header_file(F) ->
+    filename:extension(F) == ".hrl".
 
 get_all_files(Folder) ->
     filelib:fold_files(Folder, ".*.erl$", true, 
