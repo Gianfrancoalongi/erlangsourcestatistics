@@ -17,6 +17,11 @@ t() ->
     generate_all(T#tree{name="TOP"}),
     ok.
 
+t(1) ->
+    T = get_tree(),
+    lists:sort(lists:flatten(ess:quality(T))).
+
+
 do_tree(Dir) ->
     ess:dir(Dir, []).
     %% RawChildren = ess:dir(Dir, []),
@@ -92,8 +97,8 @@ generate_js_charts(Categories, DivIds, Data) ->
 %% that consume some kind of nice data format 
 %% {arity, [{oab,#value{}},{reg,#value{}}...]
 %% The generate_chart function should be recursive
-tag_transpose(#tree{name=N, value=Value, children=[]}) ->
-    {get_good_name(N), Value};
+tag_transpose(#tree{name=N, value=Value, children=[], quality = Quality}) ->
+    {get_good_name(N), [{quality, Quality}|Value]};
 tag_transpose(#tree{name=N, children=Children}) ->
     {get_good_name(N), tag_transpose_children(Children)}.
 
@@ -106,6 +111,9 @@ remove_empty_trees(L) ->
 
 tag_values(_, []) -> 
     [];
+tag_values(Tag=quality, [C|R]) ->
+    E = {C#tree.name, round(C#tree.quality)},
+    [E|tag_values(Tag, R)];
 tag_values(Tag, [C|R]) ->
     E = {C#tree.name, gv(Tag, C#tree.value)},
     [E|tag_values(Tag, R)].
@@ -114,7 +122,7 @@ tag_values(Tag, [C|R]) ->
 get_analyis_categories(L) when is_list(L) ->
     get_analyis_categories(hd(L));
 get_analyis_categories(#tree{value = Values})  ->
-    [T || {T, _} <- Values ].
+    [quality | [T || {T, _} <- Values ]].
 
 maximum_average(RawData) ->
     lists:max([ avg_value(Value) || {_,Value} <- RawData ]).

@@ -205,22 +205,26 @@ analyze_function_with_recieve_after_test() ->
 analyze_less_simple_module_test() ->
     Name = "../test/test_dir/file_read_test_2.erl",
     Res = ess:file(Name,[],[]),
+    Values = lists:sort([{arity, val(4,1,10,4)},
+                         {clauses, val(3,1,7,4)},
+                         {complexity, val(12,0,17,4)},
+                         {variable_steppings, val(0,0,0,4)},
+                         {expressions_per_line, val(1,1,7,7)},
+                         {expressions_per_function, val(10,1,15,4)},
+                         {blank_lines, 3},
+                         {lines_of_code,24},
+                         {lines_of_comments, 1},
+                         {total_lines, 28},
+                         {comment_to_line_percent, 4},
+                         {warnings, 1},
+                         {line_lengths, val(27,0,324,28)}
+                        ]),
+    
     Expected = #tree{type = file,
                      name = Name,
-                     value = lists:sort([{arity, val(4,1,10,4)},
-                                         {clauses, val(3,1,7,4)},
-                                         {complexity, val(12,0,17,4)},
-                                         {variable_steppings, val(0,0,0,4)},
-					 {expressions_per_line, val(1,1,7,7)},
-                                         {expressions_per_function, val(10,1,15,4)},
-                                         {blank_lines, 3},
-                                         {lines_of_code,24},
-                                         {lines_of_comments, 1},
-                                         {total_lines, 28},
-                                         {comment_to_line_percent, 4},
-                                         {warnings, 1},
-                                         {line_lengths, val(27,0,324,28)}
-                                        ])},
+                     value = Values,
+                     quality = ess:quality(Values)},
+    
     ?assertEqual(Expected, Res).
     
 
@@ -425,41 +429,51 @@ analyze_directory_test() ->
 				  {variable_steppings,val(1,0,1,2)},
                                   {line_lengths, val(25,0,139,11)}
                                  ]),
-    ValuesForA = #tree{type = file,
-                       name = filename:join(Dir, "a.erl"),
-		       value = lists:sort([{warnings, 0},
-                                           {arity,val(1,1,1,1)},
-					   {clauses,val(1,1,1,1)},
-                                           {comment_to_line_percent, 0},
-					   {complexity,val(1,1,1,1)},
-					   {expressions_per_function,val(1,1,1,1)},
-					   {expressions_per_line,val(1,1,1,1)},
-                                           {blank_lines, 1},
-                                           {lines_of_code,4},
-                                           {lines_of_comments, 0},
-                                           {total_lines, 5},
-					   {variable_steppings,val(0,0,0,1)},
-                                           {line_lengths, val(22, 0, 67, 5)}])},
+
+    ValuesForA = lists:sort([{warnings, 0},
+                             {arity,val(1,1,1,1)},
+                             {clauses,val(1,1,1,1)},
+                             {comment_to_line_percent, 0},
+                             {complexity,val(1,1,1,1)},
+                             {expressions_per_function,val(1,1,1,1)},
+                             {expressions_per_line,val(1,1,1,1)},
+                             {blank_lines, 1},
+                             {lines_of_code,4},
+                             {lines_of_comments, 0},
+                             {total_lines, 5},
+                             {variable_steppings,val(0,0,0,1)},
+                             {line_lengths, val(22, 0, 67, 5)}]),
+
+
+    TreeA = #tree{type = file,
+                  name = filename:join(Dir, "a.erl"),
+                  value = ValuesForA,
+                  quality = ess:quality(ValuesForA)},
     
-    ValuesForB = #tree{type = file,
-                       name = filename:join(Dir, "b.erl"),
-		       value = lists:sort([{warnings, 0},
-                                           {arity,val(2,2,2,1)},
-					   {clauses,val(1,1,1,1)},
-                                           {comment_to_line_percent, 0},
-					   {complexity,val(1,1,1,1)},
-					   {expressions_per_function,val(1,1,1,1)},
-					   {expressions_per_line,val(1,1,1,1)},
-                                           {blank_lines, 2},
-                                           {lines_of_code,4},
-                                           {lines_of_comments, 0},
-                                           {total_lines, 6},
-					   {variable_steppings,val(1,1,1,1)},
-                                           {line_lengths, val(25, 0, 72, 6)}])},
+    ValuesForB = lists:sort([{warnings, 0},
+                             {arity,val(2,2,2,1)},
+                             {clauses,val(1,1,1,1)},
+                             {comment_to_line_percent, 0},
+                             {complexity,val(1,1,1,1)},
+                             {expressions_per_function,val(1,1,1,1)},
+                             {expressions_per_line,val(1,1,1,1)},
+                             {blank_lines, 2},
+                             {lines_of_code,4},
+                             {lines_of_comments, 0},
+                             {total_lines, 6},
+                             {variable_steppings,val(1,1,1,1)},
+                             {line_lengths, val(25, 0, 72, 6)}]),
+    
+    TreeB = #tree{type = file,
+                  name = filename:join(Dir, "b.erl"),
+                  value = ValuesForB,
+                  quality = ess:quality(ValuesForB)},
+    
     Expected = #tree{type = dir,
                      name = Dir,
                      value = AggregateValues,
-                     children = [ValuesForA, ValuesForB]},
+                     quality = ess:quality(AggregateValues),
+                     children = [TreeA, TreeB]},
     ?assertMatch(Expected, Res).
 
 analyze_deep_directory_test() ->
@@ -543,7 +557,23 @@ build_tree_4_test() ->
                 #tree{name="d",children=[#tree{name="e"}]}],
     ?assertEqual(Expected, Res).
 
-
+perfect_distance_from_perfect_test() ->
+    PerfectExample = [{arity,val(1,1,1,1)},
+                      {clauses,val(1,1,1,1)},
+                      {comment_to_line_percent, 2},
+                      {complexity,val(12,0,19,8)},
+                      {expressions_per_function,val(10,1,10,10)},
+                      {expressions_per_line,val(1,1,12,12)},
+                      {variable_steppings,val(0,0,1,8)},
+                      {blank_lines,val(3,1,8,4)},
+                      {lines_of_code,val(24,4,39,4)},
+                      {lines_of_comments,val(1,0,1,4)},
+                      {total_lines,val(28,5,48,4)},
+                      {warnings, val(0,0,0,4)},
+                      {line_lengths, val(27,0,524,48)}
+                     ],
+    Res = ess:distance_from_perfect(PerfectExample),
+    ?assertEqual(0.0, Res).    
 
 func_1() ->    
     "%% another comment 

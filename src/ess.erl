@@ -3,6 +3,49 @@
 -compile(export_all).
 
 %%build tree with structure (from src dirs), then fill it with values
+quality(Values) ->
+    distance_from_perfect(Values).
+
+distance_from_perfect(Values) ->
+    Reference = perfect_measurement(),
+    Distances = [ distance(V, gv(K, Values), scaling(V)) || {K,V} <- Reference ],
+    sum_distances(Distances).
+
+distance(_, undefined,_) -> 0;
+distance(A,B, Factor) ->
+    distance2(A, value_avg(B)) * Factor.
+
+scaling(Key) ->
+    gv(Key,[{arity, 1},
+            {clauses, 1},
+            {variable_steppings, 1},
+            {expressions_per_line, 1},
+            {expressions_per_function, 1},
+            {lines_of_code,  1},
+            {comment_to_line_percent, 1},
+            {warnings, 1},
+            {line_lengths, 1}
+           ], 1).
+
+distance2(A, B) when (B =< A) -> 0;
+distance2(A, B) -> 
+    math:pow(B / (A + 1),2).
+
+sum_distances(L) ->
+    math:sqrt(lists:sum(L)).
+
+perfect_measurement() ->
+    [{arity, 1},
+     {clauses, 4},
+     {variable_steppings, 0},
+     {expressions_per_line, 1},
+     {expressions_per_function, 10},
+     {lines_of_code,  300},
+     {comment_to_line_percent, 10},
+     {warnings, 0},
+     {line_lengths, 80}
+    ].
+
 
 make_tree(Dirs) ->
     R = [filename:split(D) || D <- Dirs],
@@ -139,6 +182,7 @@ traverse({Dir,Files,SubDirs}, Fun) ->
     #tree{type = dir,
           name = Dir,
           value = sort(Aggregated),
+          quality = quality(Aggregated),
           children = Stats}.
 
 for_each_file(Files, Fun) ->
@@ -165,7 +209,8 @@ file(F, Opts, IncPaths) ->
         Value = [ warning_metric(Warnings) | analyse(AST, Opts) ]++lexical_analyse(F, Opts),
         #tree{type = file,
               name = F,
-              value = sort(Value)
+              value = sort(Value),
+              quality = quality(Value)
              }
     catch 
         _:Err ->
@@ -240,7 +285,7 @@ remove_ws(L) ->
 analyse(AST, _Opts) ->     
     Fs = [ analyze_function(F) || F <- AST, is_ast_function(F) ],
     case Fs of
-        [] -> 
+        [] ->             
             [];
         _ ->
             aggregate(Fs)
@@ -294,6 +339,8 @@ value_min(M) when is_integer(M) -> M.
 value_sum(#val{sum=Sum}) -> Sum;
 value_sum(X) when is_integer(X) -> X.
 
+value_avg(#val{avg=Avg}) -> Avg;
+value_avg(X) when is_integer(X) -> X.
 
 count_number_of_items(L) ->
     sum([ item_count(X) || X <- L ]).
@@ -557,4 +604,6 @@ replace_tag(Tag, Value, L) ->
 
 gv(Key, L) ->
     proplists:get_value(Key, L).
+gv(Key, L, Def) ->
+    proplists:get_value(Key, L, Def).
 
