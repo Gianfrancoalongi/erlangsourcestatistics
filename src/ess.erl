@@ -13,23 +13,25 @@ distance_from_perfect(Values) ->
 
 distance(_, undefined,_) -> 0;
 distance(A,B, Factor) ->
-    distance2(A, value_avg(B)) * Factor.
+    distance2(A, value_avg(B), value_max(B)) * Factor.
 
 scaling(Key) ->
-    gv(Key,[{arity, 1},
+    gv(Key,[{arity, 2},
             {clauses, 1},
             {variable_steppings, 1},
             {expressions_per_line, 1},
             {expressions_per_function, 1},
             {lines_of_code,  1},
             {comment_to_line_percent, 1},
-            {warnings, 1},
-            {line_lengths, 1}
+            {warnings, 10},
+            {complexity, 2},
+            {line_lengths, 2}
            ], 1).
 
-distance2(A, B) when (B =< A) -> 0;
-distance2(A, B) -> 
-    math:pow(B / (A + 1),2).
+distance2(A, B, _) when (B =< A) -> 0;
+distance2(Perfect, Avg, Max) -> 
+    D = math:pow((Max - Avg) / (Avg + 1),2),
+    D + math:pow(Avg / (Perfect + 1),2).
 
 sum_distances(L) ->
     math:sqrt(lists:sum(L)).
@@ -39,10 +41,11 @@ perfect_measurement() ->
      {clauses, 4},
      {variable_steppings, 0},
      {expressions_per_line, 1},
-     {expressions_per_function, 10},
+     {expressions_per_function, 20},
      {lines_of_code,  300},
      {comment_to_line_percent, 10},
      {warnings, 0},
+     {complexity, 1},
      {line_lengths, 80}
     ].
 
@@ -459,15 +462,15 @@ is_ascii_integer(_) -> false.
 
 
 structural_complexity(L) when is_list(L) ->
-    sum([ structural_complexity(X) || X <- L ]);
+    max([ structural_complexity(X) || X <- L ]);
 structural_complexity({function, _, _, _, Clauses}) ->
-    lists:max([ structural_complexity(X) || X <- Clauses ]);
+    max([ structural_complexity(X) || X <- Clauses ]);
 structural_complexity({clause, _, Match, Guards, Exprs}) ->
-    structural_complexity(Match) 
-	+ structural_complexity(Guards) 
-	+ structural_complexity(Exprs);
+    max([structural_complexity(Match),
+         structural_complexity(Guards),
+         structural_complexity(Exprs)]);
 structural_complexity({match,_,RHS,LHS}) ->
-    1+structural_complexity(RHS) + structural_complexity(LHS);
+    1 + max(structural_complexity(RHS) , structural_complexity(LHS));
 structural_complexity({call,_, _, Args}) ->
     1+structural_complexity(Args);
 structural_complexity({bin,_, Elems}) ->
@@ -475,37 +478,37 @@ structural_complexity({bin,_, Elems}) ->
 structural_complexity({bin_element,_, Elem, _, _}) ->
     structural_complexity(Elem);
 structural_complexity({'case',_, Expr, Clauses}) ->
-    1 + structural_complexity(Expr) + structural_complexity(Clauses);
+    1 + max(structural_complexity(Expr), structural_complexity(Clauses));
 structural_complexity({'if',_, Clauses}) ->
     1 + structural_complexity(Clauses);
 structural_complexity({'receive',_,Clauses}) ->
     1 + structural_complexity(Clauses);
 structural_complexity({'receive',_,Clauses, _, AfterExprs}) ->
-    1 + structural_complexity(Clauses) + structural_complexity(AfterExprs);
+    1 + max(structural_complexity(Clauses), structural_complexity(AfterExprs));
 structural_complexity({cons,_,Hd, Tl}) ->
-    structural_complexity(Hd) + structural_complexity(Tl);
+    max(structural_complexity(Hd) , structural_complexity(Tl));
 structural_complexity({record,_,_,Fields}) ->
     1+structural_complexity(Fields);
 structural_complexity({record,_,Var,_,RecordField}) ->
-    1+structural_complexity(Var)+structural_complexity(RecordField);
+    1+max(structural_complexity(Var), structural_complexity(RecordField));
 structural_complexity({record_field,_,_,Expr}) ->
     1+structural_complexity(Expr);
 structural_complexity({record_field,_,Expr1,_,Expr2}) ->
-    1+structural_complexity(Expr1)+structural_complexity(Expr2);
+    1+ max(structural_complexity(Expr1), structural_complexity(Expr2));
 structural_complexity({record_index,_,_,Expr}) ->
     1+structural_complexity(Expr);
 structural_complexity({tuple,_,Elements}) ->
     1+structural_complexity(Elements);
 structural_complexity({op,_,_,LHS,RHS}) ->
-    1+structural_complexity(LHS) + structural_complexity(RHS);
+    1+ max(structural_complexity(LHS), structural_complexity(RHS));
 structural_complexity({op,_,_,Expr}) ->
     1+structural_complexity(Expr);
 structural_complexity({lc,_,Body,Generator}) ->
-    1+structural_complexity(Body)+structural_complexity(Generator);
+    1+ max(structural_complexity(Body), structural_complexity(Generator));
 structural_complexity({generate,_,Expr,Guards}) ->
-    structural_complexity(Expr) + structural_complexity(Guards);
+    max(structural_complexity(Expr), structural_complexity(Guards));
 structural_complexity({b_generate,_,Expr,Guards}) ->
-    structural_complexity(Expr) + structural_complexity(Guards);
+    max(structural_complexity(Expr), structural_complexity(Guards));
 structural_complexity({'catch',_,CallExpr}) ->
     1+structural_complexity(CallExpr);
 structural_complexity({'fun',_,Expr}) ->
@@ -513,11 +516,11 @@ structural_complexity({'fun',_,Expr}) ->
 structural_complexity({clauses,Clauses}) ->
     0+structural_complexity(Clauses);
 structural_complexity({'try',_,CallExprs,_,Exprs,_})->
-    1+structural_complexity(CallExprs)+structural_complexity(Exprs);
+    1+ max(structural_complexity(CallExprs), structural_complexity(Exprs));
 structural_complexity({block, _, CallExprs}) ->
     1+structural_complexity(CallExprs);
 structural_complexity({bc,_,Body,Generator}) ->
-    1+structural_complexity(Body)+structural_complexity(Generator);
+    1+ max(structural_complexity(Body), structural_complexity(Generator));
 
 structural_complexity({function,_,_}) -> 0;
 structural_complexity({function,_,_,_}) -> 0;
@@ -595,7 +598,10 @@ sort(L) -> lists:sort(L).
 
 usort(L) -> lists:usort(L).
     
-sum(X) -> lists:sum(X).
+sum(L) -> lists:sum(L).
+
+max([]) -> 0;
+max(L) -> lists:max(L).    
 
 rev(L) -> lists:reverse(L).
 

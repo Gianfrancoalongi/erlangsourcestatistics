@@ -14,13 +14,19 @@ gen_res() ->
     
 t() ->
     T = get_tree(),
-    generate_all(T#tree{name="TOP"}),
+    T2 = recalculate_quality(T),
+    generate_all(T2#tree{name="TOP"}),
     ok.
 
 t(1) ->
     T = get_tree(),
     lists:sort(lists:flatten(ess:quality(T))).
 
+recalculate_quality(T=#tree{value=Values, children=Children}) ->
+    T#tree{quality = ess:quality(Values),
+           children = [ recalculate_quality(C) || C <- Children ]
+           }.
+    
 
 do_tree(Dir) ->
     ess:dir(Dir, []).
