@@ -8,45 +8,36 @@ quality(Values) ->
 
 distance_from_perfect(Values) ->
     Reference = perfect_measurement(),
-    Distances = [ distance(V, gv(K, Values), scaling(V)) || {K,V} <- Reference ],
-    sum_distances(Distances).
+    Quotes = [ smart_div(1 , smart_div(smart_avg(gv(K, Values)),  V)) * scaling(K)                   
+               || {K,V} <- Reference ],
+    sum(Quotes).
 
-distance(_, undefined,_) -> 0;
-distance(A,B, Factor) ->
-    distance2(A, value_avg(B), value_max(B)) * Factor.
+smart_avg(undefined) -> 0;
+smart_avg(V) -> value_avg(V).
+
+smart_div(undefined, _) -> 0;
+smart_div(_, 0) -> 10;
+smart_div(_, 0.0) -> 10;
+smart_div(A, B) -> A / B.
 
 scaling(Key) ->
     gv(Key,[{arity, 2},
             {clauses, 1},
             {variable_steppings, 1},
-            {expressions_per_line, 1},
             {expressions_per_function, 1},
-            {lines_of_code,  1},
-            {comment_to_line_percent, 1},
             {warnings, 10},
-            {complexity, 2},
-            {line_lengths, 2}
+            {complexity, 100},
+            {line_lengths, 50}
            ], 1).
 
-distance2(A, B, _) when (B =< A) -> 0;
-distance2(Perfect, Avg, Max) -> 
-    D = math:pow((Max - Avg) / (Avg + 1),2),
-    D + math:pow(Avg / (Perfect + 1),2).
-
-sum_distances(L) ->
-    math:sqrt(lists:sum(L)).
-
 perfect_measurement() ->
-    [{arity, 1},
+    [{arity, 2},
      {clauses, 4},
      {variable_steppings, 0},
-     {expressions_per_line, 1},
-     {expressions_per_function, 20},
-     {lines_of_code,  300},
-     {comment_to_line_percent, 10},
+     {expressions_per_function, 5},
      {warnings, 0},
      {complexity, 1},
-     {line_lengths, 80}
+     {line_lengths, 40}
     ].
 
 
