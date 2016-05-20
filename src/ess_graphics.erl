@@ -11,7 +11,14 @@ gen_res() ->
     adjust_paths(RootDir),    
     SGC = do_tree(RootDir),
     file:write_file("./res.data", term_to_binary(SGC)).
-    
+
+calibration() ->
+    RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration",
+    SGC = do_tree(RootDir),
+    T2 = recalculate_quality(SGC),
+    generate_all(T2#tree{name="TOP"}),
+    ok.
+
 t() ->
     T = get_tree(),
     T2 = recalculate_quality(T),
@@ -84,7 +91,12 @@ generate_chart_page(Name, Categories, DivIds, Data) ->
     Divs = generate_divs(DivIds),
     Table = generate_table(Divs),
     HTML = generate_html(Table, JS),
-    file:write_file(FileName, HTML).
+    case file:write_file(FileName, HTML) of
+        ok ->
+            ok;
+        Err ->
+            io:format("Error writing page ~p : ~p~n",[FileName, Err])
+    end.
 
 generate_js_charts(Categories, DivIds, Data) ->
     Z = lists:zip(Categories, DivIds),
