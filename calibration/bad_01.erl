@@ -1,8 +1,17 @@
+-module(bad_01).
 
--module(bad_examples).
+-export([update_pt_offset/4]).
 
-
--ifdef(asasgha).
+-define(OAB_FALSE,false).
+-define(OAB_PROACT_PT_OFFSET,0).
+-record(oabProactStream,{stream_id}).
+-record(megaco_sdp_m,{fmt_list,
+                      port,
+                      media}).
+-record(megaco_sdp_a,{attribute,
+                      value}).
+-record(oabPtOffset,{streamId,
+                     ptOffset}).
 
 update_pt_offset(
     [#oabProactStream{stream_id = StreamId}|TProactStreams],
@@ -33,7 +42,7 @@ update_pt_offset(
                     case lists:keyfind(StreamId, #oabPtOffset.streamId, PtOs) of
 
                         #oabPtOffset{ptOffset = PtO} ->
-                             PtO;
+                            PtO;
 
                         _ ->
                             ?OAB_PROACT_PT_OFFSET
@@ -71,37 +80,3 @@ update_pt_offset(
         TPtOffsetIaSdp,
         TOtherIaSdp,
         NewPtOs).
-
-
-
-
-update_qrs(
-    [#oabStreamResourceData{
-        local_ctrl_desc = 
-            #oabStreamData{streamId = StreamId},
-        local_desc = 
-            #oabSdpMedia{m_line = #megaco_sdp_m{media = audio,
-                                                fmt_list = [BgfPt|_] = BgfFmt}},
-        remote_desc = 
-            #oabSdpMedia{m_line = #megaco_sdp_m{fmt_list = [OfferPt|_]}}}|RDTail],
-    QRs)
-    when is_list(BgfPt),
-         is_list(OfferPt),
-	 OfferPt =/= "-" -> % Codec query result found
-    NewBgfFmt =
-        case BgfPt of 
-
-            "-" -> % No supported codecs
-                [];
-
-            _  ->
-                BgfFmt
-        end,
-    NewQRs = lists:keystore(StreamId,
-                            #oabQueryResult.streamId,
-                            QRs,
-                            #oabQueryResult{streamId = StreamId,
-                                            supported_ftm_list =  NewBgfFmt}),
-    update_qrs(RDTail, NewQRs).
-
--endif.
