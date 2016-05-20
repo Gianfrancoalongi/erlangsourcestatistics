@@ -160,21 +160,25 @@ is_string_in_name(Name, String) ->
 dir(Dir) ->
     dir(Dir, []).
 dir(Dir, Opts) ->
-    IncDirs =   sgc_extra_hrls() ++ find_hrl_dirs(Dir),
+    IncDirs = sgc_extra_hrls() ++ find_hrl_dirs(Dir),
     IncFile = [{i,IC} || IC <- IncDirs ],
     Tree = find_files(Dir),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
     traverse(Tree, ForEachFileFun).
 
 sgc_extra_hrls() ->
-    {ok,Bin} = file:read_file("/tmp/sbg_inc.conf"),
-    binary_to_term(Bin) ++ 
-    ["/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/diameter-0/include/",
-     "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/megaco-3.17.0.2/include/",
-     "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/xmerl-1.3.6/include/",
-     "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/stdlib-1.19.4/include/",
-     "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/public_key-0.21/include/",
-     "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/ssl-5.3.3/src/"].
+    case file:read_file("/tmp/sbg_inc.conf") of
+        {error,enoent} ->
+            [];
+        {ok,Bin} ->
+            binary_to_term(Bin) ++ 
+                ["/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/diameter-0/include/",
+                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/megaco-3.17.0.2/include/",
+                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/xmerl-1.3.6/include/",
+                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/stdlib-1.19.4/include/",
+                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/public_key-0.21/include/",
+                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/ssl-5.3.3/src/"]
+    end.
 
 traverse_list(L, Fun) when is_list(L) ->
     [ traverse(T, Fun) || T <- L ].

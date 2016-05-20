@@ -11,6 +11,8 @@
 -record(megaco_sdp_m,{media,
                       fmt_list}).
 
+%% This is bad because a lot of thins happen in function header.
+%% Both how many arguments, and also how deep they match, and that the guard is complex
 update_qrs(
     [#oabStreamResourceData{
         local_ctrl_desc = 
