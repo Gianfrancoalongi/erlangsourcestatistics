@@ -2,13 +2,25 @@
 -include("ess.hrl").
 -compile(export_all).
 
+
+%% Next step
+%%
+%%      Calibrate quality values for one module. I.e, the quality
+%%      component for variable steppings should be compared between
+%%      good and bad cases and also, for more complex examples,
+%%      between components.
+%%
+%%      Think about how to sum the quality for one function, one
+%%      module, one block and one subsystem
+
+
 %%build tree with structure (from src dirs), then fill it with values
 quality(Values) ->
     distance_from_perfect(Values).
 
 distance_from_perfect(Values) ->
     Reference = perfect_measurement(),
-    Quotes = [ smart_div(1 , smart_div(smart_avg(gv(K, Values)),  V)) * scaling(K)                   
+    Quotes = [ smart_div(1 , smart_div(smart_avg(gv(K, Values)),  V)) * scaling(K)
                || {K,V} <- Reference ],
     sum(Quotes).
 
