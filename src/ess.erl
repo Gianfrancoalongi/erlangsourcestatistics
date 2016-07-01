@@ -5,24 +5,31 @@
 
 %% Next step
 %%
-%%      Calibrate quality values for one module. I.e, the quality
-%%      component for variable steppings should be compared between
-%%      good and bad cases and also, for more complex examples,
-%%      between components.
-%%
-%%      Think about how to sum the quality for one function, one
-%%      module, one block and one subsystem
+%% Differentiate between good and bad. 
+%% There is a problem that all files and modules seem to get the same quality!
+%% 
+
 
 
 %%build tree with structure (from src dirs), then fill it with values
-quality(Values) ->
-    distance_from_perfect(Values).
+quality(Name, Values) ->
+    distance_from_perfect(Name, Values).
 
-distance_from_perfect(Values) ->
+distance_from_perfect(Name, Values) ->
     Reference = perfect_measurement(),
-    Quotes = [ smart_div(1 , smart_div(smart_avg(gv(K, Values)),  V)) * scaling(K)
-               || {K,V} <- Reference ],
-    sum(Quotes).
+    Quotes = [ {K, scaling(K) * calc_quality(V, smart_avg(gv(K,Values)))} || {K,V} <- Reference ],
+    Quality = sum([element(2,X)||X<-Quotes]),
+    log(" ~p ~n ~p~n(~p) :: ~p~n~n",[Name, Values,Quality, Quotes]),
+    Quality.
+
+calc_quality(T, A) when A =< T -> 
+    1;
+calc_quality(T, A) ->
+    math:pow(T / A, 2).
+
+log(F,A) ->
+    S = io_lib:format(F,A),
+    file:write_file("/tmp/res.log",S, [append]).
 
 smart_avg(undefined) -> 0;
 smart_avg(V) -> value_avg(V).
@@ -39,7 +46,7 @@ scaling(Key) ->
             {expressions_per_function, 1},
             {warnings, 10},
             {complexity, 100},
-            {line_lengths, 50}
+            {line_lengths, 1.5}
            ], 1).
 
 perfect_measurement() ->
@@ -192,7 +199,6 @@ traverse({Dir,Files,SubDirs}, Fun) ->
     #tree{type = dir,
           name = Dir,
           value = sort(Aggregated),
-          quality = quality(Aggregated),
           children = Stats}.
 
 for_each_file(Files, Fun) ->
@@ -219,8 +225,7 @@ file(F, Opts, IncPaths) ->
         Value = [ warning_metric(Warnings) | analyse(AST, Opts) ]++lexical_analyse(F, Opts),
         #tree{type = file,
               name = F,
-              value = sort(Value),
-              quality = quality(Value)
+              value = sort(Value)
              }
     catch 
         _:Err ->
@@ -333,8 +338,7 @@ aggregate_values(L) ->
     Min = lists:min(get_min_values(L)),
     Sum = sum(get_sum_values(L)),
     N = count_number_of_items(L),
-    Mean = round(Sum / N),
-    #val{max=Max, min=Min, avg=Mean, sum=Sum, n=N}.
+    calc_avg(#val{max=Max, min=Min, sum=Sum, n=N}).
 
 get_max_values(L) -> [value_max(X) || X <- L].
 get_min_values(L) -> [value_min(X) || X <- L].
@@ -374,9 +378,15 @@ warning_metric(Warnings) ->
 expressions_per_function_line({function,_,_,_,Clauses}) -> 
     LNs = [ get_toplevel_linenumbers(C) || C <- Clauses],
     ROSL = repeats_on_same_line(lists:flatten(LNs)),
-    #val{max=lists:max(ROSL), min=lists:min(ROSL), sum=sum(ROSL),
-	 n=length(ROSL)}.
+    calc_avg(#val{max=lists:max(ROSL), 
+                  min=lists:min(ROSL), 
+                  sum=sum(ROSL),
+                  n=length(ROSL)}).
 
+calc_avg(V=#val{n=0}) ->
+    V#val{avg = 0};
+calc_avg(V=#val{n=N, sum=Sum}) ->
+    V#val{avg = round(Sum / N)}.
 
 lines_per_function(AST) ->
     LNs = get_linenumbers(AST),
