@@ -19,7 +19,8 @@ compile()
 
 test()
 {
-    rebar eunit
+    erl -pa ebin/ -eval 'calibrator:run("test/erlslim.erl").' -s init stop
+#    rebar eunit
 }
 
 

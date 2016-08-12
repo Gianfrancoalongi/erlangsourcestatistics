@@ -17,9 +17,9 @@ quality(Name, Values) ->
 distance_from_perfect(Name, Values) ->
     Reference = perfect_measurement(),
     Quotes = [ {K, scaling(K) * calc_quality(V, smart_avg(gv(K,Values)))} || {K,V} <- Reference ],
-    Quality = sum([element(2,X)||X<-Quotes]),
+    Quality = 100 - sum([element(2,X)||X<-Quotes]),
     log(" ~p ~n ~p~n(~p) :: ~p~n~n",[Name, Values,Quality, Quotes]),
-    Quality.
+    {Quality, Quotes}.
 
 calc_quality(T, A) when A =< T -> 
     1;
@@ -221,16 +221,72 @@ file(F, Opts, IncPaths) ->
         {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPaths),
         {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
             beam_lib:chunks(Bin,[abstract_code]),
-        Value = [ warning_metric(Warnings) | analyse(AST, Opts) ]++lexical_analyse(F, Opts),
+        RawValues = file_raw_values(AST, Opts),        
+        RawChildren = analyse_functions(AST, Opts),
+        Q = calculate_quality_penalty(RawValues, RawChildren),
+        %%        S = calculate_statistics(RawValues),
         #tree{type = file,
               name = F,
-              value = sort(Value)
+              raw_values = RawValues,
+              children = RawChildren,
+%%              statistics = S,
+              quality_penalty = Q
              }
     catch 
         _:Err ->
             io:format("error: file: ~p: ~p~n", [F, Err]),
             undefined
     end.
+
+calculate_quality_penalty(RawValues, RawChildren) ->
+    ChildrenValues = [ RV || #tree{raw_values = RV} <- RawChildren],
+    Keys = [arity,
+            clauses,
+            variable_steppings,
+            expressions_per_function,
+            warnings,
+            complexity,
+            line_lengths
+           ],
+    [ penalty_for(Key, [RawValues|ChildrenValues]) || Key <- Keys ].
+
+penalty_for(Key, RawValues) ->
+    Values = get_all_values(Key, RawValues),
+    Penalty = lists:sum([ penalty({Key, V}) ||  V <- Values ]),
+    {Key, Penalty}.
+        
+penalty({arity, V}) when V < 2 -> 0;
+penalty({arity, V}) -> bounded_max(V, 2);
+
+penalty({clauses,V}) when V < 4 -> 0;
+penalty({clauses,V}) -> bounded_max(V, 4);
+
+penalty({variable_steppings,V}) when V =< 1 -> 0;
+penalty({variable_steppings,V}) -> bounded_max(V, 1);
+
+penalty({expressions_per_function,V}) when V =< 5 -> 0;
+penalty({expressions_per_function,V}) -> bounded_max(V, 5);
+
+penalty({warnings,V}) when V =< 0 -> 0;
+penalty({warnings,V}) -> bounded_max(V, 0);
+
+penalty({complexity,V}) when V =< 1 -> 0;
+penalty({complexity,V}) -> bounded_max(V, 1);
+
+penalty({line_lengths,V}) when V =< 40 -> 0;
+penalty({line_lengths, V}) -> bounded_max(V, 40).
+
+%%% XXX continue here somewhere with compiling and making quality values for module erlslim
+
+
+bounded_max(V, Target) ->
+    100/(math:pow(2, Target/V)).
+    
+get_all_values(K, Proplist) ->
+    [ gv(K,P) || P <- Proplist ].
+
+file_raw_values(AST, Opts) ->
+    [ warning_metric(Warnings) | lexical_analyse(F, Opts)].
 
 
 get_compile_options() ->
@@ -296,14 +352,8 @@ strip_lines(Ls) ->
 remove_ws(L) ->
     lists:dropwhile(fun(C) -> lists:member(C, [32,9]) end, L).
 
-analyse(AST, _Opts) ->     
-    Fs = [ analyze_function(F) || F <- AST, is_ast_function(F) ],
-    case Fs of
-        [] ->             
-            [];
-        _ ->
-            aggregate(Fs)
-    end.
+analyse_functions(AST, _Opts) ->     
+    [ analyze_function(F) || F <- AST, is_ast_function(F) ].
 
 aggregate_trees(Trees) ->
     handle_comment_percent(aggregate(extract_values(Trees))).
@@ -362,14 +412,16 @@ item_count(#val{n=N}) -> N;
 item_count(X) when is_integer(X) -> 1.
 
 
-analyze_function(AST) ->
-    [{complexity, structural_complexity(AST)},
-     {expressions_per_function, lines_per_function(AST)},
-     {clauses, clauses_per_function(AST)},
-     {arity, function_arity(AST)},
-     {expressions_per_line, expressions_per_function_line(AST)},
-     {variable_steppings, variable_steppings_per_function(AST)}
-    ].
+analyze_function(AST={function, _, Name, _, _}) ->
+    #tree{type = function,
+          name = Name, 
+          raw_values = [{complexity, structural_complexity(AST)},
+                        {expressions_per_function, lines_per_function(AST)},
+                        {clauses, clauses_per_function(AST)},
+                        {arity, function_arity(AST)},
+                        {expressions_per_line, expressions_per_function_line(AST)},
+                        {variable_steppings, variable_steppings_per_function(AST)}
+                       ]}.
 
 warning_metric(Warnings) ->
     {warnings, length(Warnings)}.

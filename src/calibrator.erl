@@ -4,12 +4,10 @@
 
 run(File) ->
     Tree = ess:file(File, [], []),
-    recalculate_quality(Tree).
+    R = recalculate_quality(Tree),
+    io:format("~p~n",[R]).
 
 recalculate_quality(T=#tree{name = Name,
-                            value=Values, 
-                            children=Children}) ->
-    T#tree{quality = ess:quality(Name, Values),
-           children = [ recalculate_quality(C) || C <- Children ]
-          }.
+                            raw_values=Values}) ->
+    ess:quality(Name, Values).
 
