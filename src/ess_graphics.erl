@@ -13,6 +13,7 @@ gen_res() ->
     file:write_file("./res.data", term_to_binary(SGC)).
 
 calibration() ->
+    file:write_file("/tmp/res.log",<<>>),
     RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration",
     SGC = do_tree(RootDir),
     T2 = recalculate_quality(SGC),
@@ -29,8 +30,10 @@ t(1) ->
     T = get_tree(),
     lists:sort(lists:flatten(ess:quality(T))).
 
-recalculate_quality(T=#tree{value=Values, children=Children}) ->
-    T#tree{quality = ess:quality(Values),
+recalculate_quality(T=#tree{name = Name,
+                            value=Values, 
+                            children=Children}) ->
+    T#tree{quality = ess:quality(Name, Values),
            children = [ recalculate_quality(C) || C <- Children ]
            }.
     
