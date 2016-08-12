@@ -5,4 +5,4 @@
               {applications,[kernel,stdlib]},
               {mod,{ess_app,[]}},
               {env,[]},
-              {modules,[ess,ess_graphics]}]}.
+              {modules,[calibrator,ess,ess_graphics]}]}.

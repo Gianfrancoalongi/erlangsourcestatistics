@@ -10,7 +10,6 @@
 %% 
 
 
-
 %%build tree with structure (from src dirs), then fill it with values
 quality(Name, Values) ->
     distance_from_perfect(Name, Values).
