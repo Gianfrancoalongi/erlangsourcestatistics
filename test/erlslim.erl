@@ -47,20 +47,25 @@ receive_commands_and_send_replies_until_bye(Data) ->
     seq:run_(Steps).
 
 receive_slim_request(Data) ->
-    {ok, [A,B,C,D,E,F]=TotalSize} = gen_tcp:recv(Data#data.asock, 6),
-    {ok,_} = gen_tcp:recv(Data#data.asock,1),
+    Sock = Data#data.asock,
+    {ok, [A,B,C,D,E,F]=TotalSize} = gen_tcp:recv(Sock, 6),
+    {ok, TotalSize} = gen_tcp:recv(Sock, 6),
+    {ok,_} = gen_tcp:recv(Sock,1),
     Bytes = list_to_integer(TotalSize),
-    {ok, Received} = gen_tcp:recv(Data#data.asock, Bytes),
+    {ok, Received} = gen_tcp:recv(Sock, Bytes),
     Data#data{request = [A,B,C,D,E,F,$:|Received],
 	      bye = Received == "bye"
 	     }.
 
 handle_request(Data) ->
-    Res = erlslim_command:execute(erlslim_decoder:decode(Data#data.request)),
+    Req = Data#data.request,
+    Command = erlslim_decoder:decode(Req),
+    Res = erlslim_command:execute(Command),
     Data#data{result = Res}.
 
 send_response(Data) ->
-    EncodedReply = erlslim_encoder:encode(Data#data.result),
+    Res = Data#data.result,
+    EncodedReply = erlslim_encoder:encode(Res),
     gen_tcp:send(Data#data.asock, EncodedReply),
     Data#data{reply = EncodedReply}.
 

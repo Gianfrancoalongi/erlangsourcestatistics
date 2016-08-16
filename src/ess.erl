@@ -2,7 +2,6 @@
 -include("ess.hrl").
 -compile(export_all).
 
-
 %% Next step
 %%
 %% Differentiate between good and bad. 
@@ -10,43 +9,76 @@
 %% 
 
 
-%%build tree with structure (from src dirs), then fill it with values
-quality(Name, Values) ->
-    distance_from_perfect(Name, Values).
+quality(T = #tree{type=function}) ->
+    RV = T#tree.raw_values,
+    QP = calculate_quality_penalty(RV),
+    Q = 100 - lists:sum([V||{_,V}<-QP]),
+    T#tree{quality_penalty = QP,
+           quality = Q
+          };
+quality(T = #tree{type=file}) ->
+    RV = T#tree.raw_values,
+    CS = T#tree.children,
+    CS2 = [ quality(C) || C <- CS],
+    CQP = lists:flatten([ C#tree.quality_penalty || C <- CS2 ]),
+    QP = calculate_quality_penalty(RV),
+    XXX = lists:sum([V||{_,V}<-QP]),
+    YYY = lists:sum([V||{_,V}<-CQP]),
+    Q = 100 - XXX - YYY,
+    T#tree{children = CS2,
+           quality_penalty = QP,
+           quality = Q}.
 
-distance_from_perfect(Name, Values) ->
-    Reference = perfect_measurement(),
-    Quotes = [ {K, scaling(K) * calc_quality(V, smart_avg(gv(K,Values)))} || {K,V} <- Reference ],
-    Quality = 100 - sum([element(2,X)||X<-Quotes]),
-    log(" ~p ~n ~p~n(~p) :: ~p~n~n",[Name, Values,Quality, Quotes]),
-    {Quality, Quotes}.
+calculate_quality_penalty(RawValues) ->
+    Keys = [arity,
+            clauses,
+            variable_steppings,
+            expressions_per_function,
+            warnings,
+            complexity,
+            line_lengths
+           ],
+    [ penalty_for(K, RawValues) || K <- Keys ].
 
-calc_quality(T, A) when A =< T -> 
-    1;
-calc_quality(T, A) ->
-    math:pow(T / A, 2).
+penalty_for(Key, Values) ->
+    Penalty = lists:sum([ penalty({K, V}) ||  {K,V} <- Values, K == Key ]),
+    {Key, Penalty}.
+        
+-define(ARITY_MAX, 3).
+-define(CLAUSES_MAX, 4).
+-define(VARIABLE_STEPPING_MAX, 3).
+-define(EXPRESSIONS_PER_FUNCTION_MAX, 10).
+-define(WARNINGS_MAX, 0).
+-define(COMPLEXITY_MAX, 5).
+-define(LINE_LENGTHS_MAX, 60).
 
-log(F,A) ->
-    S = io_lib:format(F,A),
-    file:write_file("/tmp/res.log",S, [append]).
+penalty({_, undefined}) -> 0;
 
-smart_avg(undefined) -> 0;
-smart_avg(V) -> value_avg(V).
+penalty({arity, V}) when V =< ?ARITY_MAX -> 0;
+penalty({arity, V}) -> bounded_max(V, ?ARITY_MAX);
 
-smart_div(undefined, _) -> 0;
-smart_div(_, 0) -> 10;
-smart_div(_, 0.0) -> 10;
-smart_div(A, B) -> A / B.
+penalty({clauses,V}) when V =< ?CLAUSES_MAX -> 0;
+penalty({clauses,V}) -> bounded_max(V, ?CLAUSES_MAX);
 
-scaling(Key) ->
-    gv(Key,[{arity, 2},
-            {clauses, 1},
-            {variable_steppings, 1},
-            {expressions_per_function, 1},
-            {warnings, 10},
-            {complexity, 100},
-            {line_lengths, 1.5}
-           ], 1).
+penalty({variable_steppings,V}) when V =< ?VARIABLE_STEPPING_MAX -> 0;
+penalty({variable_steppings,V}) -> bounded_max(V, ?VARIABLE_STEPPING_MAX);
+
+penalty({expressions_per_function,V}) when V =< ?EXPRESSIONS_PER_FUNCTION_MAX -> 0;
+penalty({expressions_per_function,V}) -> bounded_max(V, ?EXPRESSIONS_PER_FUNCTION_MAX);
+
+penalty({warnings,V}) when V =< ?WARNINGS_MAX -> 0;
+penalty({warnings,V}) -> bounded_max(V, ?WARNINGS_MAX);
+
+penalty({complexity,V}) when V =< ?COMPLEXITY_MAX -> 0;
+penalty({complexity,V}) -> bounded_max(V, ?COMPLEXITY_MAX);
+
+penalty({line_lengths, Val}) when Val#val.avg =< ?LINE_LENGTHS_MAX -> 0;
+penalty({line_lengths, Val}) -> bounded_max(Val#val.avg, ?LINE_LENGTHS_MAX).
+
+bounded_max(V1, Target) ->
+    V = V1 - Target,
+    100 / math:pow(2, (Target/(V*0.25))).
+
 
 perfect_measurement() ->
     [{arity, 2},
@@ -58,30 +90,7 @@ perfect_measurement() ->
      {line_lengths, 40}
     ].
 
-
-make_tree(Dirs) ->
-    R = [filename:split(D) || D <- Dirs],
-    mt(R).
-
-mt(R=[[H|_]|_]) ->
-    {StartsOnHd, Others} = partition_on_hd(H, R),
-    NewR = lop_off_hd(StartsOnHd),
-    Res = #tree{name=H,
-                children = mt(NewR),
-                value=[]},
-    [Res|mt(Others)];
-mt(_) ->
-    [].
-
-partition_on_hd(H, L) ->
-    lists:partition(fun([ H1|_ ]) when H1==H -> true;
-                       (_) -> false end, L).
-
-lop_off_hd(L) ->
-    [ tl(D) || D <- L ].
-
 is_dir_in_test_structure(F) ->
-    %%    string:str(F, "/test") /= 0.
     case rev(F) of
         "tset"++_ -> true;
         _ -> is_string_in_name(F, "/ft/") orelse
@@ -98,6 +107,7 @@ mk_fullnames(Dir, Fs) ->
     [ filename:join(Dir, F) || F <- Fs ].
 
 find_hrl_dirs(Dir) ->
+
     Fs = list_dir_full_names(Dir),
     IncFiles = files_ending_in_hrl(Fs),
     SubDirs = find_hrl_in_subdirs(subdirs_hrl(Fs)),
@@ -221,16 +231,12 @@ file(F, Opts, IncPaths) ->
         {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPaths),
         {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
             beam_lib:chunks(Bin,[abstract_code]),
-        RawValues = file_raw_values(AST, Opts),        
+        RawValues = file_raw_values(Warnings, F, Opts),
         RawChildren = analyse_functions(AST, Opts),
-        Q = calculate_quality_penalty(RawValues, RawChildren),
-        %%        S = calculate_statistics(RawValues),
         #tree{type = file,
               name = F,
               raw_values = RawValues,
-              children = RawChildren,
-%%              statistics = S,
-              quality_penalty = Q
+              children = RawChildren
              }
     catch 
         _:Err ->
@@ -238,56 +244,9 @@ file(F, Opts, IncPaths) ->
             undefined
     end.
 
-calculate_quality_penalty(RawValues, RawChildren) ->
-    ChildrenValues = [ RV || #tree{raw_values = RV} <- RawChildren],
-    Keys = [arity,
-            clauses,
-            variable_steppings,
-            expressions_per_function,
-            warnings,
-            complexity,
-            line_lengths
-           ],
-    [ penalty_for(Key, [RawValues|ChildrenValues]) || Key <- Keys ].
-
-penalty_for(Key, RawValues) ->
-    Values = get_all_values(Key, RawValues),
-    Penalty = lists:sum([ penalty({Key, V}) ||  V <- Values ]),
-    {Key, Penalty}.
-        
-penalty({arity, V}) when V < 2 -> 0;
-penalty({arity, V}) -> bounded_max(V, 2);
-
-penalty({clauses,V}) when V < 4 -> 0;
-penalty({clauses,V}) -> bounded_max(V, 4);
-
-penalty({variable_steppings,V}) when V =< 1 -> 0;
-penalty({variable_steppings,V}) -> bounded_max(V, 1);
-
-penalty({expressions_per_function,V}) when V =< 5 -> 0;
-penalty({expressions_per_function,V}) -> bounded_max(V, 5);
-
-penalty({warnings,V}) when V =< 0 -> 0;
-penalty({warnings,V}) -> bounded_max(V, 0);
-
-penalty({complexity,V}) when V =< 1 -> 0;
-penalty({complexity,V}) -> bounded_max(V, 1);
-
-penalty({line_lengths,V}) when V =< 40 -> 0;
-penalty({line_lengths, V}) -> bounded_max(V, 40).
-
-%%% XXX continue here somewhere with compiling and making quality values for module erlslim
-
-
-bounded_max(V, Target) ->
-    100/(math:pow(2, Target/V)).
     
 get_all_values(K, Proplist) ->
-    [ gv(K,P) || P <- Proplist ].
-
-file_raw_values(AST, Opts) ->
-    [ warning_metric(Warnings) | lexical_analyse(F, Opts)].
-
+    [ V || {Key,V} <- Proplist, Key == K ].
 
 get_compile_options() ->
     [binary,verbose, debug_info, return].
@@ -297,7 +256,8 @@ lexical_analyse(F, _Opts) ->
     lexical_analyse_string(binary_to_list(Bin)).
 
 lexical_analyse_string(Str) ->
-    handle_comment_percent(count_comment_and_code_lines(strip_lines(divide_into_lines(Str)))).
+    L = strip_lines(divide_into_lines(Str)),    
+    handle_comment_percent(count_comment_and_code_lines(L)).    
 
 count_comment_and_code_lines(L) ->
     Tot = length(L),
@@ -351,6 +311,9 @@ strip_lines(Ls) ->
 
 remove_ws(L) ->
     lists:dropwhile(fun(C) -> lists:member(C, [32,9]) end, L).
+
+file_raw_values(Warnings, F, Opts) ->
+    [ warning_metric(Warnings) | lexical_analyse(F, Opts)].
 
 analyse_functions(AST, _Opts) ->     
     [ analyze_function(F) || F <- AST, is_ast_function(F) ].
