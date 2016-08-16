@@ -1,8 +1,11 @@
--record(tree,{type :: file | dir,
+-record(tree,{type :: file | dir | function,
               name :: string(),
-              value = [] :: [],
+              raw_values :: [],
+              statistics :: [],
+              quality_penalty :: [],
               children = [] :: [],
-              quality :: float()
+              quality :: float(),
+              value
              }).
 
 -record(val, {max, min, avg, sum, n}).
