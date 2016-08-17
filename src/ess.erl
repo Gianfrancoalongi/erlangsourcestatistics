@@ -12,23 +12,26 @@
 quality(T = #tree{type=function}) ->
     RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV),
-    Q = 100 - lists:sum([V||{_,V}<-QP]),
-    T#tree{quality_penalty = QP,
-           quality = Q
-          };
+    T#tree{quality_penalty = QP};
 quality(T = #tree{type=file}) ->
-    RV = T#tree.raw_values,
     CS = T#tree.children,
     CS2 = [ quality(C) || C <- CS],
     CQP = lists:flatten([ C#tree.quality_penalty || C <- CS2 ]),
+    RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV),
-    XXX = lists:sum([V||{_,V}<-QP]),
-    YYY = lists:sum([V||{_,V}<-CQP]),
-    Q = 100 - XXX - YYY,
     T#tree{children = CS2,
-           quality_penalty = QP,
-           quality = Q}.
+           quality_penalty = key_sum(QP ++ CQP)};
+quality(T = #tree{type=dir}) ->
+    CS = T#tree.children,
+    CS2 = [ quality(C) || C <- CS],
+    CQP = lists:flatten([ C#tree.quality_penalty || C <- CS2 ]),
+    T#tree{children = CS2,
+           quality_penalty = key_sum(CQP)}.
 
+key_sum(Proplist) ->
+    Keys = lists:usort([K||{K,_}<-Proplist]),
+    [ {K, lists:sum(get_all_values(K,Proplist))} || K <- Keys ].
+    
 calculate_quality_penalty(RawValues) ->
     Keys = [arity,
             clauses,
@@ -46,7 +49,7 @@ penalty_for(Key, Values) ->
         
 -define(ARITY_MAX, 3).
 -define(CLAUSES_MAX, 4).
--define(VARIABLE_STEPPING_MAX, 3).
+-define(VARIABLE_STEPPING_MAX, 1).
 -define(EXPRESSIONS_PER_FUNCTION_MAX, 10).
 -define(WARNINGS_MAX, 0).
 -define(COMPLEXITY_MAX, 5).
@@ -319,7 +322,7 @@ analyse_functions(AST, _Opts) ->
     [ analyze_function(F) || F <- AST, is_ast_function(F) ].
 
 aggregate_trees(Trees) ->
-    handle_comment_percent(aggregate(extract_values(Trees))).
+    handle_comment_percent(aggregate(extract_raw_values(Trees))).
 
 handle_comment_percent(L) ->
     Percent = calculate_comment_to_line_percent(L),
@@ -330,8 +333,8 @@ calculate_comment_to_line_percent(L) ->
     Comments = value_sum(gv(lines_of_comments,L)),
     round(100*(Comments/Lines)).
 
-extract_values(Trees) ->
-    [ T#tree.value || T <- Trees ].
+extract_raw_values(Trees) ->
+    [ T#tree.raw_values || T <- Trees ].
 
 aggregate(Values) ->
     group_on_tag(Values).

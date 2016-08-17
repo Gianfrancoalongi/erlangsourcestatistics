@@ -16,13 +16,13 @@ calibration() ->
     file:write_file("/tmp/res.log",<<>>),
     RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration",
     SGC = do_tree(RootDir),
-    T2 = recalculate_quality(SGC),
-    generate_all(T2#tree{name="TOP"}),
+    T = ess:quality(SGC),
+    generate_all(T#tree{name="TOP"}),
     ok.
 
 t() ->
     T = get_tree(),
-    T2 = recalculate_quality(T),
+    T2 = ess:quality(T),
     generate_all(T2#tree{name="TOP"}),
     ok.
 
@@ -30,21 +30,8 @@ t(1) ->
     T = get_tree(),
     lists:sort(lists:flatten(ess:quality(T))).
 
-recalculate_quality(T=#tree{name = Name,
-                            value=Values, 
-                            children=Children}) ->
-    T#tree{quality = ess:quality(Name, Values),
-           children = [ recalculate_quality(C) || C <- Children ]
-           }.
-    
-
 do_tree(Dir) ->
     ess:dir(Dir, []).
-    %% RawChildren = ess:dir(Dir, []),
-    %% Children = remove_empty_trees(RawChildren),
-    %% #tree{name=Dir,
-    %%       value = ess:aggregate_trees(Children),
-    %%       children = Children}.
 
 get_tree() ->
     {ok,Bin}  = file:read_file("./res.data"),
@@ -118,7 +105,7 @@ generate_js_charts(Categories, DivIds, Data) ->
 %% that consume some kind of nice data format 
 %% {arity, [{oab,#value{}},{reg,#value{}}...]
 %% The generate_chart function should be recursive
-tag_transpose(#tree{name=N, value=Value, children=[], quality = Quality}) ->
+tag_transpose(#tree{name=N, quality_penalty=Value, children=[], quality = Quality}) ->
     {get_good_name(N), [{quality, Quality}|Value]};
 tag_transpose(#tree{name=N, children=Children}) ->
     {get_good_name(N), tag_transpose_children(Children)}.

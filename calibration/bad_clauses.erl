@@ -12,6 +12,8 @@ collect([A|R],Ints,Atoms,Tuples) when is_atom(A) ->
     collect(R,Ints,[A|Atoms],Tuples);
 collect([T|R],Ints,Atoms,Tuples) when is_tuple(T) ->
     collect(R,Ints,Atoms,[T|Tuples]);
+collect([T|R],Ints,Atoms,Tuples) when not is_tuple(T) ->
+    collect(R,Ints,Atoms,[T|Tuples]);
 collect([],Ints,Atoms,Tuples) ->
     {Ints, Atoms, Tuples}.
 
