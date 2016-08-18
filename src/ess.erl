@@ -30,10 +30,9 @@ quality(T = #tree{type=dir}) ->
     CS = T#tree.children,
     CS2 = [ quality(C) || C <- CS],
     CQP = lists:flatten([ C#tree.quality_penalty || C <- CS2 ]),
-    Q = 100 - lists:sum([V||{_,V}<-CQP]),
     T#tree{children = CS2,
            quality_penalty = key_sum(CQP),
-           quality = Q
+           quality = 100 - lists:sum([V||{_,V}<-CQP])
           }.
 
 key_sum(Proplist) ->
@@ -395,7 +394,7 @@ item_count(X) when is_integer(X) -> 1.
 
 analyze_function(AST={function, _, Name, _, _}) ->
     #tree{type = function,
-          name = Name, 
+          name = make_name(AST),
           raw_values = [{complexity, structural_complexity(AST)},
                         {expressions_per_function, lines_per_function(AST)},
                         {clauses, clauses_per_function(AST)},
@@ -403,6 +402,9 @@ analyze_function(AST={function, _, Name, _, _}) ->
                         {expressions_per_line, expressions_per_function_line(AST)},
                         {variable_steppings, variable_steppings_per_function(AST)}
                        ]}.
+
+make_name(AST = {function, _, Name, Arity, _}) ->
+    list_to_atom(lists:flatten(io_lib:format("~p|~p",[Name, Arity]))).
 
 warning_metric(Warnings) ->
     {warnings, length(Warnings)}.

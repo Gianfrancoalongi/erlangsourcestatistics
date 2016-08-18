@@ -35,5 +35,5 @@ h(A,C,D,B,E,F) ->
 i(A,C,B,D,F,E) ->
     h(A,B,C,D,E,F).
 
-l(A,B,C,D,E,F) ->
+l(_,B,_,_,_,_) ->
     tl(B).
