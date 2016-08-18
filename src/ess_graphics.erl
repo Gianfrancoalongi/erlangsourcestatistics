@@ -99,9 +99,8 @@ generate_js_charts(Categories, DivIds, Data) ->
               TagData = gv(Tag, Data),
               RawData = [ {get_good_name(Dir), Val} || {Dir, Val} <- TagData ],
               DataPoints = generate_datapoints(RawData),
-              MaxY = 5+maximum_average(RawData),
               Header = capitalize(a2l(Tag)),
-              generate_chart_js(DivId, Header, MaxY, DataPoints)
+              generate_chart_js(DivId, Header, DataPoints)
       end,
      Z).
 
@@ -135,6 +134,9 @@ get_analyis_categories(#tree{quality_penalty = Values})  ->
 
 maximum_average(RawData) ->
     lists:max([ avg_value(Value) || {_,Value} <- RawData ]).
+
+minimum(RawData) ->
+    lists:min([ avg_value(Value) || {_,Value} <- RawData ]).
 
 avg_value(#val{avg = Value}) ->
     Value;
@@ -212,13 +214,13 @@ generate_html(Table,JSs) ->
 "</body>
 </html>".
 
-generate_chart_js(DivId, Header, MaxY, DataPoints) ->
+generate_chart_js(DivId, Header, DataPoints) ->
   "var chart_"++Header++" = new CanvasJS.Chart(\"chartContainer"++i2l(DivId)++"\",
     {
       zoomEnabled: true,
       animationEnabled: true,
       title:{
-        text: \""++Header++"\"                    
+        text: \""++Header++"\"
       },
       axisX: {
         title:\"Block\",
@@ -232,9 +234,7 @@ generate_chart_js(DivId, Header, MaxY, DataPoints) ->
         gridColor: \"lightgrey\",
         tickColor: \"lightgrey\",
         lineThickness: 0,
-        valueFormatString:\"#.\",
-        maximum: "++i2l(round(1.1*MaxY))++",
-        interval: "++i2l(round(MaxY/10)+1)++"
+        valueFormatString:\"#.\"
       },
 
       data: [

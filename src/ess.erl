@@ -60,7 +60,7 @@ penalty_for(Key, Values) ->
 -define(VARIABLE_STEPPING_MAX, 1).
 -define(EXPRESSIONS_PER_FUNCTION_MAX, 10).
 -define(WARNINGS_MAX, 0).
--define(COMPLEXITY_MAX, 5).
+-define(COMPLEXITY_MAX, 3).
 -define(LINE_LENGTHS_MAX, 60).
 
 penalty({_, undefined}) -> 0;
