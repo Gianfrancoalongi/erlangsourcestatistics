@@ -2,31 +2,115 @@
 -include("ess.hrl").
 -export([generate/1]).
 -compile(export_all).
-
--export([t/0, gen_res/0]).
 -define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
-
-gen_res() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg",
-    adjust_paths(RootDir),
-    SGC = ess:dir(RootDir),
-    file:write_file("./res.data", term_to_binary(SGC)).
-
-calibration() ->
-    RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration",
-    SGC = ess:dir(RootDir),
-    T = ess:quality(SGC),
-    generate_all(T#tree{name="TOP"}),
-    ok.
 
 t() ->
     RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg",
+%%    RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration/",
     adjust_paths(RootDir),
     SGC = ess:dir(RootDir),
-    T2 = ess:quality(SGC),
-    T3 = add_quality_value_as_quality_penalty_to_graph_it(T2),
-    generate_all(T3#tree{name="TOP"}),
-    ok.
+    SGC2 = ess:quality(SGC),
+    SGC3 = set_node_ids(SGC2),
+    RawNDS = lists:flatten(generate_node_data_set(SGC3)),
+    RawEDS = lists:flatten(generate_edges_data_set(SGC3)),
+    NDS = to_node_string(RawNDS),
+    EDS = to_edge_string(RawEDS),
+    io:format("# nodes: ~p~n", [new_unique_id()]),
+    generate_html_page(NDS, EDS).
+
+generate_html_page(NDS, EDS) ->
+    S = "<!doctype html>
+<html><head> <title>Network | Basic usage</title>
+  <script type=\"text/javascript\" src=\"http://visjs.org/dist/vis.js\"></script>
+  <style type=\"text/css\">
+    #mynetwork {
+      width: 1000px;
+      height: 600px;
+      improvedLayout: false;
+      border: 1px solid lightgray;
+    }
+  </style>
+</head>
+<body>
+<p>
+  Create a simple network with some nodes and edges.
+</p>
+<div id=\"mynetwork\"></div>
+
+<script type=\"text/javascript\">
+  // create an array with nodes
+  var nodes = new vis.DataSet(["++NDS++"
+  ]);
+
+  // create an array with edges
+  var edges = new vis.DataSet(["++EDS++"
+  ]);
+
+  // create a network
+  var container = document.getElementById('mynetwork');
+  var data = {
+    nodes: nodes,
+    edges: edges
+  };
+  var options = {layout: {improvedLayout: false}};
+  var network = new vis.Network(container, data, options);
+</script>
+</body>
+</html>",
+    file:write_file("/tmp/res.html", list_to_binary(S)).
+
+set_node_ids(T) ->
+    CS = [ set_node_ids(C) || C <- T#tree.children ],
+    T#tree{id = new_unique_id(),
+           children = CS}.
+
+generate_node_data_set(T=#tree{children=Ch}) ->
+    S = generate_one_node(T),
+    ChDataSet = [ generate_node_data_set(C) || C <- Ch],
+    [ S | ChDataSet].
+
+generate_edges_data_set(#tree{children=[]}) ->
+    [];
+generate_edges_data_set(T=#tree{id=Id, children=Ch}) ->
+    ChIds = [ C#tree.id || C <- Ch],
+    Edges = [ genereate_one_edge(Id, ChId) || ChId <- ChIds ],
+    ChEdges = [ generate_edges_data_set(C) || C <- Ch],
+    Edges ++ ChEdges .
+    
+
+generate_one_node(#tree{id=Id, name=Name, quality=Q}) ->
+    Color = quality_to_color(Q),
+    {Id, filename:basename(Name), Q, Color}.
+
+quality_to_color(N) ->
+    NN = max(N, 0),
+    G = round(255*NN/100),
+    R = 255-G,
+    B = 90,
+    {R, G, B}.
+
+to_node_string(L) ->
+    S = [nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s'}", [Id, 
+                                                                Name, 
+                                                                round(Quality), 
+                                                                rgba(Color)]) 
+         || {Id, Name, Quality, Color} <- L],
+    string:join(S, ",\n").
+
+to_edge_string(L) ->
+    S = [nice_str("{from: ~p, to: ~p}", [Id, Name]) || {Id, Name} <- L],
+    string:join(S, ",").
+    
+rgba({R,G,B}) ->
+    "rgba("++i2l(R)++","++i2l(G)++","++i2l(B)++",1)".
+
+nice_str(F,A) ->
+    lists:flatten(io_lib:format(F, A)).
+
+genereate_one_edge(Id, ChId) ->
+    {Id, ChId}.
+    %% S = io_lib:format("{from: ~p, to: ~p}", [Id, ChId]),
+    %% lists:flatten(S).
 
 add_quality_value_as_quality_penalty_to_graph_it(T = #tree{quality=Q,
                                                            quality_penalty=QP,
@@ -34,6 +118,15 @@ add_quality_value_as_quality_penalty_to_graph_it(T = #tree{quality=Q,
                                                           }) ->
     T#tree{quality_penalty=[{quality,Q}|QP],
            children = [ add_quality_value_as_quality_penalty_to_graph_it(C) || C <- CS ]}.
+
+new_unique_id() ->
+    Old = case get(unique_id) of
+              X when is_integer(X) -> X;
+              _ -> 0
+          end,
+    New = Old+1,
+    put(unique_id, New),
+    New.
 
 get_tree() ->
     {ok,Bin}  = file:read_file("./res.data"),
@@ -99,9 +192,8 @@ generate_js_charts(Categories, DivIds, Data) ->
               TagData = gv(Tag, Data),
               RawData = [ {get_good_name(Dir), Val} || {Dir, Val} <- TagData ],
               DataPoints = generate_datapoints(RawData),
-              MaxY = 5+maximum_average(RawData),
               Header = capitalize(a2l(Tag)),
-              generate_chart_js(DivId, Header, MaxY, DataPoints)
+              generate_chart_js(DivId, Header, DataPoints)
       end,
      Z).
 
@@ -135,6 +227,9 @@ get_analyis_categories(#tree{quality_penalty = Values})  ->
 
 maximum_average(RawData) ->
     lists:max([ avg_value(Value) || {_,Value} <- RawData ]).
+
+minimum(RawData) ->
+    lists:min([ avg_value(Value) || {_,Value} <- RawData ]).
 
 avg_value(#val{avg = Value}) ->
     Value;
@@ -212,13 +307,13 @@ generate_html(Table,JSs) ->
 "</body>
 </html>".
 
-generate_chart_js(DivId, Header, MaxY, DataPoints) ->
+generate_chart_js(DivId, Header, DataPoints) ->
   "var chart_"++Header++" = new CanvasJS.Chart(\"chartContainer"++i2l(DivId)++"\",
     {
       zoomEnabled: true,
       animationEnabled: true,
       title:{
-        text: \""++Header++"\"                    
+        text: \""++Header++"\"
       },
       axisX: {
         title:\"Block\",
@@ -232,9 +327,7 @@ generate_chart_js(DivId, Header, MaxY, DataPoints) ->
         gridColor: \"lightgrey\",
         tickColor: \"lightgrey\",
         lineThickness: 0,
-        valueFormatString:\"#.\",
-        maximum: "++i2l(round(1.1*MaxY))++",
-        interval: "++i2l(round(MaxY/10)+1)++"
+        valueFormatString:\"#.\"
       },
 
       data: [

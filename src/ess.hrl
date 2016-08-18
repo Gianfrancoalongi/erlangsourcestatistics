@@ -1,4 +1,5 @@
 -record(tree,{type :: file | dir | function,
+              id :: integer(),
               name :: string(),
               raw_values :: [],
               statistics :: [],
