@@ -19,8 +19,10 @@ compile()
 
 test()
 {
-    erl -pa ebin/ -eval 'calibrator:run("test/erlslim.erl").' -s init stop
-#    rebar eunit
+    erl -pa ebin/ -eval 'ess_graphics:t().' -s init stop
+#    erl -pa ebin/ -eval 'calibrator:run_dir().' -s init stop
+#   erl -pa ebin/ -eval 'calibrator:run("test/erlslim.erl").' -s init stop
+#   rebar eunit
 }
 
 

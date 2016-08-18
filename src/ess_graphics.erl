@@ -7,44 +7,33 @@
 -define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
 
 gen_res() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc/src",
-    adjust_paths(RootDir),    
-    SGC = do_tree(RootDir),
+    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg",
+    adjust_paths(RootDir),
+    SGC = ess:dir(RootDir),
     file:write_file("./res.data", term_to_binary(SGC)).
 
 calibration() ->
-    file:write_file("/tmp/res.log",<<>>),
     RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration",
-    SGC = do_tree(RootDir),
-    T2 = recalculate_quality(SGC),
-    generate_all(T2#tree{name="TOP"}),
+    SGC = ess:dir(RootDir),
+    T = ess:quality(SGC),
+    generate_all(T#tree{name="TOP"}),
     ok.
 
 t() ->
-    T = get_tree(),
-    T2 = recalculate_quality(T),
-    generate_all(T2#tree{name="TOP"}),
+    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg",
+    adjust_paths(RootDir),
+    SGC = ess:dir(RootDir),
+    T2 = ess:quality(SGC),
+    T3 = add_quality_value_as_quality_penalty_to_graph_it(T2),
+    generate_all(T3#tree{name="TOP"}),
     ok.
 
-t(1) ->
-    T = get_tree(),
-    lists:sort(lists:flatten(ess:quality(T))).
-
-recalculate_quality(T=#tree{name = Name,
-                            value=Values, 
-                            children=Children}) ->
-    T#tree{quality = ess:quality(Name, Values),
-           children = [ recalculate_quality(C) || C <- Children ]
-           }.
-    
-
-do_tree(Dir) ->
-    ess:dir(Dir, []).
-    %% RawChildren = ess:dir(Dir, []),
-    %% Children = remove_empty_trees(RawChildren),
-    %% #tree{name=Dir,
-    %%       value = ess:aggregate_trees(Children),
-    %%       children = Children}.
+add_quality_value_as_quality_penalty_to_graph_it(T = #tree{quality=Q,
+                                                           quality_penalty=QP,
+                                                           children = CS
+                                                          }) ->
+    T#tree{quality_penalty=[{quality,Q}|QP],
+           children = [ add_quality_value_as_quality_penalty_to_graph_it(C) || C <- CS ]}.
 
 get_tree() ->
     {ok,Bin}  = file:read_file("./res.data"),
@@ -73,6 +62,8 @@ adjust_paths(Root) ->
 
 add_path(Path) ->
     code:add_pathz(Path).
+
+
 
 generate_all(#tree{children=[]}) ->
     [];
@@ -118,8 +109,8 @@ generate_js_charts(Categories, DivIds, Data) ->
 %% that consume some kind of nice data format 
 %% {arity, [{oab,#value{}},{reg,#value{}}...]
 %% The generate_chart function should be recursive
-tag_transpose(#tree{name=N, value=Value, children=[], quality = Quality}) ->
-    {get_good_name(N), [{quality, Quality}|Value]};
+tag_transpose(#tree{name=N, quality_penalty=Value, children=[]}) ->
+    {get_good_name(N), Value};
 tag_transpose(#tree{name=N, children=Children}) ->
     {get_good_name(N), tag_transpose_children(Children)}.
 
@@ -132,18 +123,15 @@ remove_empty_trees(L) ->
 
 tag_values(_, []) -> 
     [];
-tag_values(Tag=quality, [C|R]) ->
-    E = {C#tree.name, round(C#tree.quality)},
-    [E|tag_values(Tag, R)];
 tag_values(Tag, [C|R]) ->
-    E = {C#tree.name, gv(Tag, C#tree.value)},
+    E = {C#tree.name, gv(Tag, C#tree.quality_penalty)},
     [E|tag_values(Tag, R)].
 
 
 get_analyis_categories(L) when is_list(L) ->
     get_analyis_categories(hd(L));
-get_analyis_categories(#tree{value = Values})  ->
-    [quality | [T || {T, _} <- Values ]].
+get_analyis_categories(#tree{quality_penalty = Values})  ->
+    [ T || {T, _} <- Values ].
 
 maximum_average(RawData) ->
     lists:max([ avg_value(Value) || {_,Value} <- RawData ]).

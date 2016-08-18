@@ -4,7 +4,7 @@
               statistics :: [],
               quality_penalty :: [],
               children = [] :: [],
-              quality :: float(),
+              quality = 100 :: float(),
               value
              }).
 

@@ -12,23 +12,34 @@
 quality(T = #tree{type=function}) ->
     RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV),
-    Q = 100 - lists:sum([V||{_,V}<-QP]),
     T#tree{quality_penalty = QP,
-           quality = Q
+           quality = 100 - lists:sum([V||{_,V}<-QP])
           };
 quality(T = #tree{type=file}) ->
-    RV = T#tree.raw_values,
     CS = T#tree.children,
     CS2 = [ quality(C) || C <- CS],
     CQP = lists:flatten([ C#tree.quality_penalty || C <- CS2 ]),
+    RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV),
-    XXX = lists:sum([V||{_,V}<-QP]),
-    YYY = lists:sum([V||{_,V}<-CQP]),
-    Q = 100 - XXX - YYY,
+    QP2 = key_sum(QP ++ CQP),
     T#tree{children = CS2,
-           quality_penalty = QP,
-           quality = Q}.
+           quality_penalty = QP2,
+           quality = 100 - lists:sum([V||{_,V}<-QP2])
+          };
+quality(T = #tree{type=dir}) ->
+    CS = T#tree.children,
+    CS2 = [ quality(C) || C <- CS],
+    CQP = lists:flatten([ C#tree.quality_penalty || C <- CS2 ]),
+    Q = 100 - lists:sum([V||{_,V}<-CQP]),
+    T#tree{children = CS2,
+           quality_penalty = key_sum(CQP),
+           quality = Q
+          }.
 
+key_sum(Proplist) ->
+    Keys = lists:usort([K||{K,_}<-Proplist]),
+    [ {K, lists:sum(get_all_values(K,Proplist))} || K <- Keys ].
+    
 calculate_quality_penalty(RawValues) ->
     Keys = [arity,
             clauses,
@@ -46,7 +57,7 @@ penalty_for(Key, Values) ->
         
 -define(ARITY_MAX, 3).
 -define(CLAUSES_MAX, 4).
--define(VARIABLE_STEPPING_MAX, 3).
+-define(VARIABLE_STEPPING_MAX, 1).
 -define(EXPRESSIONS_PER_FUNCTION_MAX, 10).
 -define(WARNINGS_MAX, 0).
 -define(COMPLEXITY_MAX, 5).
@@ -182,15 +193,16 @@ dir(Dir, Opts) ->
     IncDirs = sgc_extra_hrls() ++ find_hrl_dirs(Dir),
     IncFile = [{i,IC} || IC <- IncDirs ],
     Tree = find_files(Dir),
+    io:format("Tree from find_files/1~n   > ~p~n",[Tree]),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
     traverse(Tree, ForEachFileFun).
 
 sgc_extra_hrls() ->
-    case file:read_file("/tmp/sbg_inc.conf") of
+    case file:read_file("/local/scratch/etxpell/proj/erlangsourcestatistics/sbg_inc.conf") of
         {error,enoent} ->
             [];
         {ok,Bin} ->
-            binary_to_term(Bin) ++ 
+            string:tokens(binary_to_list(Bin),"\n")++
                 ["/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/diameter-0/include/",
                  "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/megaco-3.17.0.2/include/",
                  "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/xmerl-1.3.6/include/",
@@ -204,10 +216,10 @@ traverse_list(L, Fun) when is_list(L) ->
 
 traverse({Dir,Files,SubDirs}, Fun) ->
     Stats = for_each_file(Files, Fun) ++ traverse_list(SubDirs, Fun),
-    Aggregated = aggregate_trees(Stats),
+%    Aggregated = aggregate_trees(Stats),
     #tree{type = dir,
           name = Dir,
-          value = sort(Aggregated),
+%          value = sort(Aggregated),
           children = Stats}.
 
 for_each_file(Files, Fun) ->
@@ -319,7 +331,7 @@ analyse_functions(AST, _Opts) ->
     [ analyze_function(F) || F <- AST, is_ast_function(F) ].
 
 aggregate_trees(Trees) ->
-    handle_comment_percent(aggregate(extract_values(Trees))).
+    handle_comment_percent(aggregate(extract_raw_values(Trees))).
 
 handle_comment_percent(L) ->
     Percent = calculate_comment_to_line_percent(L),
@@ -330,17 +342,23 @@ calculate_comment_to_line_percent(L) ->
     Comments = value_sum(gv(lines_of_comments,L)),
     round(100*(Comments/Lines)).
 
-extract_values(Trees) ->
-    [ T#tree.value || T <- Trees ].
+extract_raw_values(Trees) ->
+    [ T#tree.raw_values || T <- Trees ].
 
 aggregate(Values) ->
     group_on_tag(Values).
 
 group_on_tag(Fs) ->
-    Keys = proplists:get_keys(hd(Fs)),
-    All_results = lists:flatten(Fs),
-    aggregate2([ {Key, proplists:get_all_values(Key,All_results)} || 
-                   Key <- Keys ]).
+    try 
+        Keys = proplists:get_keys(hd(Fs)),
+        All_results = lists:flatten(Fs),
+        aggregate2([ {Key, proplists:get_all_values(Key,All_results)} || 
+                       Key <- Keys ])
+    catch
+        _:_ ->
+            io:format("FS:::~p~n",[Fs]),
+            []
+    end.
 
 aggregate2(L) ->
     [ {Key,aggregate_values(Values)} || {Key,Values} <- L].
