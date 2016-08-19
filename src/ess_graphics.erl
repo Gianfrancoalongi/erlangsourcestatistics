@@ -20,9 +20,9 @@ t() ->
     NDS = to_node_string(RawNDS),
     EDS = to_edge_string(RawEDS),
     io:format("# nodes: ~p~n", [new_unique_id()]),
-    generate_html_page(NDS, EDS).
+    generate_html_page(NDS, EDS, SGC5).
 
-generate_html_page(NDS, EDS) ->
+generate_html_page(NDS, EDS, SGC) ->
     S = "<!doctype html>
 <html><head> <title>Network | Basic usage</title>
   <script type=\"text/javascript\" src=\"http://visjs.org/dist/vis.js\"></script>
@@ -58,6 +58,10 @@ generate_html_page(NDS, EDS) ->
   };
   var options = {layout: {improvedLayout: false}};
   var network = new vis.Network(container, data, options);
+  network.on(\"doubleClick\", function (params) {
+           window.location.href = nodes[parseInt(params.nodes,10)-1].name+\"_analysis.html\";
+    });
+
 </script>
 </body>
 </html>",
@@ -129,10 +133,12 @@ quality_to_color(N) ->
     {R, G, B}.
 
 to_node_string(L) ->
-    S = [nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s'}", [Id, 
-                                                                Name, 
-                                                                round(Quality), 
-                                                                rgba(Color)]) 
+    S = [nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', name:\"~s\"}", 
+                  [Id, 
+                   Name, 
+                   round(Quality), 
+                   rgba(Color),
+                   Name])
          || {Id, Name, Quality, Color} <- L],
     string:join(S, ",\n").
 
@@ -148,15 +154,6 @@ nice_str(F,A) ->
 
 genereate_one_edge(Id, ChId) ->
     {Id, ChId}.
-    %% S = io_lib:format("{from: ~p, to: ~p}", [Id, ChId]),
-    %% lists:flatten(S).
-
-add_quality_value_as_quality_penalty_to_graph_it(T = #tree{quality=Q,
-                                                           quality_penalty=QP,
-                                                           children = CS
-                                                          }) ->
-    T#tree{quality_penalty=[{quality,Q}|QP],
-           children = [ add_quality_value_as_quality_penalty_to_graph_it(C) || C <- CS ]}.
 
 new_unique_id() ->
     Old = case get(unique_id) of
@@ -167,9 +164,8 @@ new_unique_id() ->
     put(unique_id, New),
     New.
 
-get_tree() ->
-    {ok,Bin}  = file:read_file("./res.data"),
-    binary_to_term(Bin).
+
+
 
 sgc_dirs(RootDir) ->
     block_dirs(filename:join(RootDir, "src/sgc"), sgc_blocks()).
