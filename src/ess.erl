@@ -87,7 +87,7 @@ penalty({line_lengths, Val}) -> bounded_max(Val#val.avg, ?LINE_LENGTHS_MAX).
 
 bounded_max(V1, Target) ->
     V = V1 - Target,
-    100 / math:pow(2, (Target/(V*0.25))).
+    round( 100 / math:pow(2, (Target/(V*0.25))) ).
 
 
 perfect_measurement() ->
