@@ -5,20 +5,24 @@
 -define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
 
 t() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg",
+    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg/src",
 %%    RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration/",
     adjust_paths(RootDir),
     SGC = ess:dir(RootDir),
     SGC2 = ess:quality(SGC),
-    SGC3 = set_node_ids(SGC2),
-    RawNDS = lists:flatten(generate_node_data_set(SGC3)),
-    RawEDS = lists:flatten(generate_edges_data_set(SGC3)),
+    Level = 100,
+    SGC3 = prune_tree_on_quality(SGC2, Level),
+    SGC4 = set_node_ids(SGC3),
+    MaxNodes = 200,
+    SGC5 = prune_graph_on_number_of_nodes(SGC4, MaxNodes),
+    RawNDS = lists:flatten(generate_node_data_set(SGC5)),
+    RawEDS = lists:flatten(generate_edges_data_set(SGC5)),
     NDS = to_node_string(RawNDS),
     EDS = to_edge_string(RawEDS),
     io:format("# nodes: ~p~n", [new_unique_id()]),
-    generate_html_page(NDS, EDS).
+    generate_html_page(NDS, EDS, SGC5).
 
-generate_html_page(NDS, EDS) ->
+generate_html_page(NDS, EDS, SGC) ->
     S = "<!doctype html>
 <html><head> <title>Network | Basic usage</title>
   <script type=\"text/javascript\" src=\"http://visjs.org/dist/vis.js\"></script>
@@ -54,15 +58,55 @@ generate_html_page(NDS, EDS) ->
   };
   var options = {layout: {improvedLayout: false}};
   var network = new vis.Network(container, data, options);
+  network.on(\"doubleClick\", function (params) {
+           window.location.href = nodes[parseInt(params.nodes,10)-1].name+\"_analysis.html\";
+    });
+
 </script>
 </body>
 </html>",
     file:write_file("/tmp/res.html", list_to_binary(S)).
 
-set_node_ids(T) ->
-    CS = [ set_node_ids(C) || C <- T#tree.children ],
-    T#tree{id = new_unique_id(),
-           children = CS}.
+prune_tree_on_quality(T = #tree{children = Ch}, Level) -> 
+    Ch2 = [ C || C <- Ch, C#tree.quality < Level ],
+    Ch3 = [ prune_tree_on_quality(C, Level) || C <- Ch2 ],
+    T#tree{children = Ch3}.
+
+set_node_ids(T = #tree{children = Ch}) ->
+    Id = new_unique_id(),
+    T#tree{id=Id, children=set_node_ids_children(Ch)}.
+
+set_node_ids_children(Ch) ->
+    ChWithId = [ C#tree{id = new_unique_id()} || C <- Ch ],
+    [ C#tree{children=set_node_ids_children(C#tree.children)} || C <- ChWithId ].
+
+prune_graph_on_number_of_nodes(T = #tree{children=[]}, _) ->
+    T;
+prune_graph_on_number_of_nodes(T = #tree{id=Id, children=Ch}, MaxNodes) ->
+    LastChild = last_child(T),
+    case shall_we_prune(LastChild, MaxNodes) of
+        true ->
+            Ch2 = remove_all_children(Ch),
+            T#tree{children = Ch2};
+        false ->
+            case shall_we_prune(last_child(LastChild), MaxNodes) of
+                true ->
+                    Ch2 = remove_all_children(Ch),
+                    T#tree{children = Ch2};
+                false ->
+                    Ch2 = [ prune_graph_on_number_of_nodes(C, MaxNodes) || C <- Ch ],
+                    T#tree{children = Ch2}
+            end
+    end.
+
+shall_we_prune(T, MaxNodes) ->
+    T#tree.id > MaxNodes.
+
+last_child(#tree{children=Ch}) ->
+    lists:last(Ch).
+
+remove_all_children(Ch) ->
+    [ C#tree{children = []} || C <- Ch ].
 
 generate_node_data_set(T=#tree{children=Ch}) ->
     S = generate_one_node(T),
@@ -72,11 +116,10 @@ generate_node_data_set(T=#tree{children=Ch}) ->
 generate_edges_data_set(#tree{children=[]}) ->
     [];
 generate_edges_data_set(T=#tree{id=Id, children=Ch}) ->
-    ChIds = [ C#tree.id || C <- Ch],
+    ChIds = [ C#tree.id || C <- Ch, C#tree.quality < 100 ],
     Edges = [ genereate_one_edge(Id, ChId) || ChId <- ChIds ],
     ChEdges = [ generate_edges_data_set(C) || C <- Ch],
     Edges ++ ChEdges .
-    
 
 generate_one_node(#tree{id=Id, name=Name, quality=Q}) ->
     Color = quality_to_color(Q),
@@ -90,15 +133,17 @@ quality_to_color(N) ->
     {R, G, B}.
 
 to_node_string(L) ->
-    S = [nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s'}", [Id, 
-                                                                Name, 
-                                                                round(Quality), 
-                                                                rgba(Color)]) 
+    S = [nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', name:\"~s\"}", 
+                  [Id, 
+                   Name, 
+                   round(Quality), 
+                   rgba(Color),
+                   Name])
          || {Id, Name, Quality, Color} <- L],
     string:join(S, ",\n").
 
 to_edge_string(L) ->
-    S = [nice_str("{from: ~p, to: ~p}", [Id, Name]) || {Id, Name} <- L],
+    S = [nice_str("{from: ~p, to: ~p, color:'black'}", [Id, Name]) || {Id, Name} <- L],
     string:join(S, ",").
     
 rgba({R,G,B}) ->
@@ -109,15 +154,6 @@ nice_str(F,A) ->
 
 genereate_one_edge(Id, ChId) ->
     {Id, ChId}.
-    %% S = io_lib:format("{from: ~p, to: ~p}", [Id, ChId]),
-    %% lists:flatten(S).
-
-add_quality_value_as_quality_penalty_to_graph_it(T = #tree{quality=Q,
-                                                           quality_penalty=QP,
-                                                           children = CS
-                                                          }) ->
-    T#tree{quality_penalty=[{quality,Q}|QP],
-           children = [ add_quality_value_as_quality_penalty_to_graph_it(C) || C <- CS ]}.
 
 new_unique_id() ->
     Old = case get(unique_id) of
@@ -128,9 +164,8 @@ new_unique_id() ->
     put(unique_id, New),
     New.
 
-get_tree() ->
-    {ok,Bin}  = file:read_file("./res.data"),
-    binary_to_term(Bin).
+
+
 
 sgc_dirs(RootDir) ->
     block_dirs(filename:join(RootDir, "src/sgc"), sgc_blocks()).
