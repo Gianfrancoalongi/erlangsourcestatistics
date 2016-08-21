@@ -1,5 +1,6 @@
 -record(tree,{type :: file | dir | function,
               id :: integer(),
+              child_of = [],
               name :: string(),
               raw_values :: [],
               statistics :: [],

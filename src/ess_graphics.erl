@@ -6,23 +6,21 @@
 
 t() ->
     RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg/src",
-%%    RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration/",
+    %%RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration/",
     adjust_paths(RootDir),
     SGC = ess:dir(RootDir),
     SGC2 = ess:quality(SGC),
     Level = 100,
     SGC3 = prune_tree_on_quality(SGC2, Level),
     SGC4 = set_node_ids(SGC3),
-    MaxNodes = 200,
-    SGC5 = prune_graph_on_number_of_nodes(SGC4, MaxNodes),
-    RawNDS = lists:flatten(generate_node_data_set(SGC5)),
-    RawEDS = lists:flatten(generate_edges_data_set(SGC5)),
+    RawNDS = lists:flatten(generate_node_data_set(SGC4)),
+    RawEDS = lists:flatten(generate_edges_data_set(SGC4)),
     NDS = to_node_string(RawNDS),
     EDS = to_edge_string(RawEDS),
     io:format("# nodes: ~p~n", [new_unique_id()]),
-    generate_html_page(NDS, EDS, SGC5).
+    generate_html_page(NDS, EDS).
 
-generate_html_page(NDS, EDS, SGC) ->
+generate_html_page(NDS, EDS) ->
     S = "<!doctype html>
 <html><head> <title>Network | Basic usage</title>
   <script type=\"text/javascript\" src=\"http://visjs.org/dist/vis.js\"></script>
@@ -56,11 +54,27 @@ generate_html_page(NDS, EDS, SGC) ->
     nodes: nodes,
     edges: edges
   };
-  var options = {layout: {improvedLayout: false}};
+  var options = {layout: {improvedLayout:true},
+                 physics:{enabled:true} };
   var network = new vis.Network(container, data, options);
   network.on(\"doubleClick\", function (params) {
-           window.location.href = nodes[parseInt(params.nodes,10)-1].name+\"_analysis.html\";
+           collapse_uncollapse_node(parseInt(params.nodes));
     });
+
+  function collapse_uncollapse_node(Id) {
+        nodes.forEach(function(n) {
+                        if(n.childof.indexOf(Id) != -1) {
+                           n.hidden = ! n.hidden;
+                           edges.forEach(function(e){ 
+                               if(e.from == Id && e.to == n.id) {
+                                  e.hidden = n.hidden;
+                                  edges.update(e);
+                               }
+                           },this);
+                           nodes.update(n);                           
+                        }
+                     },this);
+  }
 
 </script>
 </body>
@@ -74,11 +88,18 @@ prune_tree_on_quality(T = #tree{children = Ch}, Level) ->
 
 set_node_ids(T = #tree{children = Ch}) ->
     Id = new_unique_id(),
-    T#tree{id=Id, children=set_node_ids_children(Ch)}.
+    T#tree{id=Id, 
+           children=set_node_ids_children(Ch, [Id])
+          }.
 
-set_node_ids_children(Ch) ->
-    ChWithId = [ C#tree{id = new_unique_id()} || C <- Ch ],
-    [ C#tree{children=set_node_ids_children(C#tree.children)} || C <- ChWithId ].
+set_node_ids_children(Ch, ChildOf) ->
+    ChWithId = [ C#tree{id = new_unique_id(),
+                        child_of = ChildOf
+                       } || C <- Ch ],
+    [ begin
+          Id = C#tree.id,
+          C#tree{children=set_node_ids_children(C#tree.children, [Id|ChildOf])} 
+      end || C <- ChWithId ].
 
 prune_graph_on_number_of_nodes(T = #tree{children=[]}, _) ->
     T;
@@ -121,9 +142,9 @@ generate_edges_data_set(T=#tree{id=Id, children=Ch}) ->
     ChEdges = [ generate_edges_data_set(C) || C <- Ch],
     Edges ++ ChEdges .
 
-generate_one_node(#tree{id=Id, name=Name, quality=Q}) ->
+generate_one_node(#tree{id=Id, name=Name, quality=Q, child_of=CO}) ->
     Color = quality_to_color(Q),
-    {Id, filename:basename(Name), Q, Color}.
+    {Id, filename:basename(Name), Q, Color, CO}.
 
 quality_to_color(N) ->
     NN = max(N, 0),
@@ -133,13 +154,13 @@ quality_to_color(N) ->
     {R, G, B}.
 
 to_node_string(L) ->
-    S = [nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', name:\"~s\"}", 
+    S = [nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', childof: ~p}", 
                   [Id, 
                    Name, 
                    round(Quality), 
                    rgba(Color),
-                   Name])
-         || {Id, Name, Quality, Color} <- L],
+                   CO])
+         || {Id, Name, Quality, Color, CO} <- L],
     string:join(S, ",\n").
 
 to_edge_string(L) ->
