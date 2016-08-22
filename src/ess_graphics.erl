@@ -4,6 +4,9 @@
 -compile(export_all).
 -define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
 
+-record(node,{id, name, quality, color, children_ids, collapsed=false, render=false}).
+-record(edge,{id, to}).
+
 t() ->
     RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg/src",
     %%RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration/",
@@ -13,14 +16,36 @@ t() ->
     Level = 100,
     SGC3 = prune_tree_on_quality(SGC2, Level),
     SGC4 = set_node_ids(SGC3),
-    RawNDS = lists:flatten(generate_node_data_set(SGC4)),
-    RawEDS = lists:flatten(generate_edges_data_set(SGC4)),
-    NDS = to_node_string(RawNDS),
-    EDS = to_edge_string(RawEDS),
+    SGC5 = mark_collapsed_nodes(SGC4),
+    SGC6 = mark_first_render(SGC5),
+    RawNDS = lists:flatten(generate_node_data_set(SGC6)),
+    RawEDS = lists:flatten(generate_edges_data_set(SGC6)),
+    {VisibleNDS, HiddenNDS} = lists:partition(fun(N) -> N#node.render end, RawNDS),
     io:format("# nodes: ~p~n", [new_unique_id()]),
-    generate_html_page(NDS, EDS).
+    VNDS = to_node_string(VisibleNDS),
+    HNDS = to_node_string(HiddenNDS),
+    VEDS = to_edge_string(RawEDS),
+    generate_html_page(VNDS, VEDS, HNDS, "").
 
-generate_html_page(NDS, EDS) ->
+mark_collapsed_nodes(L) when is_list(L) ->
+    [mark_collapsed_nodes(T) || T <- L];
+mark_collapsed_nodes(T=#tree{id=Id, children=Ch}) when length(Ch) == 1 ->
+    T#tree{children=mark_collapsed_nodes(Ch)};
+mark_collapsed_nodes(T=#tree{id=Id, children=Ch}) ->
+    T#tree{children=set_collapsed(Ch)}.
+
+set_collapsed(L) ->
+    [T#tree{collapsed=true} || T <- L].
+    
+
+mark_first_render(L) when is_list(L) ->
+    [mark_first_render(T) || T <- L];
+mark_first_render(T=#tree{collapsed=true}) ->
+    T#tree{render=true};
+mark_first_render(T=#tree{children=Ch}) ->
+    T#tree{render=true, children=mark_first_render(Ch)}.
+
+generate_html_page(NDS, EDS, HIDDEN_NDS, HIDDEN_EDS) ->
     S = "<!doctype html>
 <html><head> <title>Network | Basic usage</title>
   <script type=\"text/javascript\" src=\"http://visjs.org/dist/vis.js\"></script>
@@ -44,8 +69,16 @@ generate_html_page(NDS, EDS) ->
   var nodes = new vis.DataSet(["++NDS++"
   ]);
 
+  // create an array with ALL nodes
+  var all_nodes = new vis.DataSet(["++HIDDEN_NDS++","++NDS++"
+  ]);
+
   // create an array with edges
   var edges = new vis.DataSet(["++EDS++"
+  ]);
+
+  // create an array with ALL edges
+  var hidden_nodes = new vis.DataSet(["++HIDDEN_EDS++"
   ]);
 
   // create a network
@@ -62,18 +95,53 @@ generate_html_page(NDS, EDS) ->
     });
 
   function collapse_uncollapse_node(Id) {
-        nodes.forEach(function(n) {
-                        if(n.childof.indexOf(Id) != -1) {
-                           n.hidden = ! n.hidden;
-                           edges.forEach(function(e){ 
-                               if(e.from == Id && e.to == n.id) {
-                                  e.hidden = n.hidden;
-                                  edges.update(e);
-                               }
-                           },this);
-                           nodes.update(n);                           
+       all_nodes.forEach(function(n) {
+                        if(n.id == Id) {
+                           if( n.collapsed ) {
+                              n.children_ids.forEach(function(ChId) {
+                                  add_node_with_id(ChId);
+                                  add_edge_from_to(Id,ChId);
+                                  n.collapsed=false;
+                                  all_nodes.update(n);
+                              },this);
+                           }else{
+                              n.children_ids.forEach(function(ChId) {
+                                  remove_node_with_id(ChId);
+                                  remove_edge_from(Id);
+                                  n.collapsed=true;
+                                  all_nodes.update(n);
+                              },this);
+                           }
                         }
+                      },this);
+    }
+
+  function add_node_with_id(Id) {
+        all_nodes.forEach(function(n) {
+                        if(n.id == Id) { 
+                           nodes.add(n);
+                        }
+                      },this);
+  }
+
+  function add_edge_from_to(Id, ChId) {
+        edges.add({from: Id, to: ChId, color: 'black'});
+  }
+
+  function remove_node_with_id(Id) {
+       nodes.forEach(function(n) {
+                       if(n.id == Id) { 
+                          nodes.remove(n);
+                       }
                      },this);
+  }
+
+  function remove_edge_from(Id) {
+      edges.forEach(function(e) {
+                      if(e.from == Id ) {
+                          edges.remove(e);
+                      }
+                   },this);
   }
 
 </script>
@@ -89,16 +157,14 @@ prune_tree_on_quality(T = #tree{children = Ch}, Level) ->
 set_node_ids(T = #tree{children = Ch}) ->
     Id = new_unique_id(),
     T#tree{id=Id, 
-           children=set_node_ids_children(Ch, [Id])
+           children=set_node_ids_children(Ch)
           }.
 
-set_node_ids_children(Ch, ChildOf) ->
-    ChWithId = [ C#tree{id = new_unique_id(),
-                        child_of = ChildOf
-                       } || C <- Ch ],
+set_node_ids_children(Ch) ->
+    ChWithId = [ C#tree{id = new_unique_id()} || C <- Ch ],
     [ begin
           Id = C#tree.id,
-          C#tree{children=set_node_ids_children(C#tree.children, [Id|ChildOf])} 
+          C#tree{children=set_node_ids_children(C#tree.children)} 
       end || C <- ChWithId ].
 
 prune_graph_on_number_of_nodes(T = #tree{children=[]}, _) ->
@@ -136,15 +202,29 @@ generate_node_data_set(T=#tree{children=Ch}) ->
 
 generate_edges_data_set(#tree{children=[]}) ->
     [];
+generate_edges_data_set(#tree{collapsed=true}) ->
+    [];
 generate_edges_data_set(T=#tree{id=Id, children=Ch}) ->
     ChIds = [ C#tree.id || C <- Ch, C#tree.quality < 100 ],
-    Edges = [ genereate_one_edge(Id, ChId) || ChId <- ChIds ],
+    Edges = [ generate_one_edge(Id, ChId) || ChId <- ChIds ],
     ChEdges = [ generate_edges_data_set(C) || C <- Ch],
-    Edges ++ ChEdges .
+    Edges ++ ChEdges.
 
-generate_one_node(#tree{id=Id, name=Name, quality=Q, child_of=CO}) ->
+generate_one_node(#tree{id=Id, name=Name, quality=Q, 
+                        children=Ch, render=Render, collapsed=Collapsed}) ->
     Color = quality_to_color(Q),
-    {Id, filename:basename(Name), Q, Color, CO}.
+    #node{id=Id, 
+          name=filename:basename(Name), 
+          quality=Q, 
+          color=Color, 
+          children_ids=[C#tree.id||C<-Ch],
+          render=Render,
+          collapsed=Collapsed
+         }.
+
+generate_one_edge(Id, ChId) ->
+    #edge{id=Id, 
+          to=ChId}.
 
 quality_to_color(N) ->
     NN = max(N, 0),
@@ -154,17 +234,22 @@ quality_to_color(N) ->
     {R, G, B}.
 
 to_node_string(L) ->
-    S = [nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', childof: ~p}", 
-                  [Id, 
-                   Name, 
-                   round(Quality), 
-                   rgba(Color),
-                   CO])
-         || {Id, Name, Quality, Color, CO} <- L],
+    S = [ nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', children_ids: ~w, collapsed:~p}", 
+                  [N#node.id,
+                   N#node.name,
+                   round(N#node.quality),
+                   rgba(N#node.color),
+                   N#node.children_ids,
+                   N#node.collapsed
+                  ])
+         || N <- L],
     string:join(S, ",\n").
 
 to_edge_string(L) ->
-    S = [nice_str("{from: ~p, to: ~p, color:'black'}", [Id, Name]) || {Id, Name} <- L],
+    S = [nice_str("{from: ~p, to: ~p, color:'black'}", 
+                  [E#edge.id, 
+                   E#edge.to
+                  ]) || E <- L],
     string:join(S, ",").
     
 rgba({R,G,B}) ->
@@ -172,9 +257,6 @@ rgba({R,G,B}) ->
 
 nice_str(F,A) ->
     lists:flatten(io_lib:format(F, A)).
-
-genereate_one_edge(Id, ChId) ->
-    {Id, ChId}.
 
 new_unique_id() ->
     Old = case get(unique_id) of
