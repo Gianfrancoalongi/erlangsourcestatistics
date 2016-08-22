@@ -7,7 +7,9 @@
               quality_penalty :: [],
               children = [] :: [],
               quality = 100 :: float(),
-              value
+              value,
+              collapsed = false,
+              render = false
              }).
 
 -record(val, {max, min, avg, sum, n}).
