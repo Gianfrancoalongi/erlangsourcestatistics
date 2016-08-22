@@ -4,6 +4,9 @@
 -compile(export_all).
 -define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
 
+-record(node,{id, name, quality, color, child_of, hidden}).
+-record(edge,{id, to, hidden}).
+
 t() ->
     RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg/src",
     %%RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration/",
@@ -11,14 +14,20 @@ t() ->
     SGC = ess:dir(RootDir),
     SGC2 = ess:quality(SGC),
     Level = 100,
-    SGC3 = prune_tree_on_quality(SGC2, Level),
+    SGC3 = prune_tree_on_quality(SGC2, Level),   
     SGC4 = set_node_ids(SGC3),
-    RawNDS = lists:flatten(generate_node_data_set(SGC4)),
-    RawEDS = lists:flatten(generate_edges_data_set(SGC4)),
+    VisibleIds = ids_of_first_multi_child_nodes(SGC4),
+    RawNDS = lists:flatten(generate_node_data_set(SGC4, VisibleIds)),
+    RawEDS = lists:flatten(generate_edges_data_set(SGC4, VisibleIds)),
     NDS = to_node_string(RawNDS),
     EDS = to_edge_string(RawEDS),
     io:format("# nodes: ~p~n", [new_unique_id()]),
     generate_html_page(NDS, EDS).
+
+ids_of_first_multi_child_nodes(#tree{id=Id, children=[T]}) ->
+    [Id | ids_of_first_multi_child_nodes(T) ];
+ids_of_first_multi_child_nodes(#tree{id=Id, children=L}) ->
+    [Id | [  C#tree.id || C <- L ]].
 
 generate_html_page(NDS, EDS) ->
     S = "<!doctype html>
@@ -129,22 +138,35 @@ last_child(#tree{children=Ch}) ->
 remove_all_children(Ch) ->
     [ C#tree{children = []} || C <- Ch ].
 
-generate_node_data_set(T=#tree{children=Ch}) ->
-    S = generate_one_node(T),
-    ChDataSet = [ generate_node_data_set(C) || C <- Ch],
+generate_node_data_set(T=#tree{children=Ch}, VisibleIds) ->
+    S = generate_one_node(T, VisibleIds),
+    ChDataSet = [ generate_node_data_set(C, VisibleIds) || C <- Ch],
     [ S | ChDataSet].
 
-generate_edges_data_set(#tree{children=[]}) ->
+generate_edges_data_set(#tree{children=[]}, _) ->
     [];
-generate_edges_data_set(T=#tree{id=Id, children=Ch}) ->
+generate_edges_data_set(T=#tree{id=Id, children=Ch}, VisibleIds) ->
     ChIds = [ C#tree.id || C <- Ch, C#tree.quality < 100 ],
-    Edges = [ genereate_one_edge(Id, ChId) || ChId <- ChIds ],
-    ChEdges = [ generate_edges_data_set(C) || C <- Ch],
+    Edges = [ generate_one_edge(Id, ChId, VisibleIds) || ChId <- ChIds ],
+    ChEdges = [ generate_edges_data_set(C, VisibleIds) || C <- Ch],
     Edges ++ ChEdges .
 
-generate_one_node(#tree{id=Id, name=Name, quality=Q, child_of=CO}) ->
+generate_one_node(#tree{id=Id, name=Name, quality=Q, child_of=CO}, VisibleIds) ->
     Color = quality_to_color(Q),
-    {Id, filename:basename(Name), Q, Color, CO}.
+    #node{id=Id, 
+          name=filename:basename(Name), 
+          quality=Q, 
+          color=Color, 
+          child_of=CO,
+          hidden=is_hidden(Id, VisibleIds)}.
+
+generate_one_edge(Id, ChId, VisibleIds) ->
+    #edge{id=Id, 
+          to=ChId, 
+          hidden=is_hidden(ChId, VisibleIds)}.
+
+is_hidden(Id, VisibleIds) ->
+    not lists:member(Id, VisibleIds).
 
 quality_to_color(N) ->
     NN = max(N, 0),
@@ -154,17 +176,23 @@ quality_to_color(N) ->
     {R, G, B}.
 
 to_node_string(L) ->
-    S = [nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', childof: ~p}", 
-                  [Id, 
-                   Name, 
-                   round(Quality), 
-                   rgba(Color),
-                   CO])
-         || {Id, Name, Quality, Color, CO} <- L],
+    S = [ nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', childof: ~p, hidden:~p}", 
+                  [N#node.id,
+                   N#node.name,
+                   round(N#node.quality),
+                   rgba(N#node.color),
+                   N#node.child_of,
+                   N#node.hidden
+                  ])
+         || N <- L],
     string:join(S, ",\n").
 
 to_edge_string(L) ->
-    S = [nice_str("{from: ~p, to: ~p, color:'black'}", [Id, Name]) || {Id, Name} <- L],
+    S = [nice_str("{from: ~p, to: ~p, color:'black', hidden:~p}", 
+                  [E#edge.id, 
+                   E#edge.to,
+                   E#edge.hidden
+                  ]) || E <- L],
     string:join(S, ",").
     
 rgba({R,G,B}) ->
@@ -172,9 +200,6 @@ rgba({R,G,B}) ->
 
 nice_str(F,A) ->
     lists:flatten(io_lib:format(F, A)).
-
-genereate_one_edge(Id, ChId) ->
-    {Id, ChId}.
 
 new_unique_id() ->
     Old = case get(unique_id) of
