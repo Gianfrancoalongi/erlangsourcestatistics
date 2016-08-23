@@ -9,7 +9,7 @@
 -record(edge,{id, to}).
 
 t() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg/src/",
+    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/",
     adjust_paths(RootDir),
     SGC = ess:dir(RootDir),
     SGC2 = ess:quality(SGC),
@@ -47,13 +47,12 @@ mark_first_render(T=#tree{children=Ch}) ->
 
 generate_html_page(NDS, EDS, HIDDEN_NDS, HIDDEN_EDS) ->
     S = "<!doctype html>
-<html><head> <title>Network | Basic usage</title>
+<html><head> <title>Software Quality Graph</title>
   <script type=\"text/javascript\" src=\"http://visjs.org/dist/vis.js\"></script>
   <style type=\"text/css\">
     #mynetwork {
       width: 1000px;
       height: 600px;
-      improvedLayout: false;
       border: 1px solid lightgray;
     }
     div.vis-network-tooltip {
@@ -78,9 +77,6 @@ generate_html_page(NDS, EDS, HIDDEN_NDS, HIDDEN_EDS) ->
   </style>
 </head>
 <body>
-<p>
-  Create a simple network with some nodes and edges.
-</p>
 <div id=\"mynetwork\"></div>
 
 <script type=\"text/javascript\">
@@ -107,8 +103,18 @@ generate_html_page(NDS, EDS, HIDDEN_NDS, HIDDEN_EDS) ->
     edges: edges
   };
   var options = {layout:{improvedLayout:true},
-                 physics:{enabled:true},
-                 interaction:{hover:true} 
+                 physics:{enabled:true,
+                          repulsion:{nodeDistance:300}},
+                 interaction:{hover:true},
+
+                 nodes: {
+                   shape: 'box',
+                   font: { size: 10, color: 'black'},
+                   borderWidth: 2
+                 },
+
+                 edges: {width: 1}
+
                  };
   var network = new vis.Network(container, data, options);
 
