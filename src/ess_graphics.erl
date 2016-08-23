@@ -51,10 +51,11 @@ generate_html_page(NDS, EDS, HIDDEN_NDS, HIDDEN_EDS) ->
   <script type=\"text/javascript\" src=\"http://visjs.org/dist/vis.js\"></script>
   <style type=\"text/css\">
     #mynetwork {
-      width: 1000px;
-      height: 600px;
+      width: 100vw;
+      height: 100vh;
       border: 1px solid lightgray;
     }
+
     div.vis-network-tooltip {
       position: absolute;
       visibility: hidden;
@@ -74,10 +75,11 @@ generate_html_page(NDS, EDS, HIDDEN_NDS, HIDDEN_EDS) ->
       box-shadow: 3px 3px 10px rgba(0, 0, 0, 0.2);
       pointer-events: none;
     }
+
   </style>
 </head>
 <body>
-<div id=\"mynetwork\"></div>
+<div id=\"mynetwork\" height=100%, width=100%></div>
 
 <script type=\"text/javascript\">
   // create an array with nodes
@@ -237,17 +239,22 @@ quality_to_color(N) ->
     {R, G, B}.
 
 to_node_string(L) ->
-    S = [ nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', children_ids: ~w, collapsed:~p, title:\"~s\"}", 
+    S = [ nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', children_ids: ~w, collapsed:~p, title:\"~s\", mass:~p}", 
                   [N#node.id,
                    N#node.name,
                    round(N#node.quality),
                    rgba(N#node.color),
                    N#node.children_ids,
                    N#node.collapsed,
-                   quality_penalty_to_title(N#node.quality_penalty)
+                   quality_penalty_to_title(N#node.quality_penalty),
+                   quality_to_mass(N#node.quality)
                   ])
          || N <- L],
     string:join(S, ",\n").
+
+
+quality_to_mass(Q) ->
+    round(10 - (10 / abs(100-Q))).
 
 quality_penalty_to_title(QP) ->
     string:join([ lists:flatten(io_lib:format("~p: ~p",[K,V])) || {K,V}<-QP],"</br> ").
