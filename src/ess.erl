@@ -192,7 +192,6 @@ dir(Dir, Opts) ->
     IncDirs = sgc_extra_hrls() ++ find_hrl_dirs(Dir),
     IncFile = [{i,IC} || IC <- IncDirs ],
     Tree = find_files(Dir),
-    io:format("Tree from find_files/1~n   > ~p~n",[Tree]),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
     traverse(Tree, ForEachFileFun).
 

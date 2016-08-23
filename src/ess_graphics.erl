@@ -4,12 +4,12 @@
 -compile(export_all).
 -define(RESULT_DIR, "/home/etxpell/dev_patches/ESS-pages/").
 
--record(node,{id, name, quality, color, children_ids, collapsed=false, render=false}).
+-record(node,{id, name, quality, color, children_ids, collapsed=false, render=false,
+              quality_penalty}).
 -record(edge,{id, to}).
 
 t() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg/src",
-    %%RootDir = "/local/scratch/etxpell/proj/erlangsourcestatistics/calibration/",
+    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/",
     adjust_paths(RootDir),
     SGC = ess:dir(RootDir),
     SGC2 = ess:quality(SGC),
@@ -47,22 +47,39 @@ mark_first_render(T=#tree{children=Ch}) ->
 
 generate_html_page(NDS, EDS, HIDDEN_NDS, HIDDEN_EDS) ->
     S = "<!doctype html>
-<html><head> <title>Network | Basic usage</title>
+<html><head> <title>Software Quality Graph</title>
   <script type=\"text/javascript\" src=\"http://visjs.org/dist/vis.js\"></script>
   <style type=\"text/css\">
     #mynetwork {
-      width: 1000px;
-      height: 600px;
-      improvedLayout: false;
+      width: 100vw;
+      height: 100vh;
       border: 1px solid lightgray;
     }
+
+    div.vis-network-tooltip {
+      position: absolute;
+      visibility: hidden;
+      padding: 5px;
+      white-space: nowrap;
+
+      font-family: verdana;
+      font-size:14px;
+      color:#000000;
+      background-color: #f5f4ed;
+
+      -moz-border-radius: 3px;
+      -webkit-border-radius: 3px;
+      border-radius: 3px;
+      border: 1px solid #808074;
+
+      box-shadow: 3px 3px 10px rgba(0, 0, 0, 0.2);
+      pointer-events: none;
+    }
+
   </style>
 </head>
 <body>
-<p>
-  Create a simple network with some nodes and edges.
-</p>
-<div id=\"mynetwork\"></div>
+<div id=\"mynetwork\" height=100%, width=100%></div>
 
 <script type=\"text/javascript\">
   // create an array with nodes
@@ -87,9 +104,22 @@ generate_html_page(NDS, EDS, HIDDEN_NDS, HIDDEN_EDS) ->
     nodes: nodes,
     edges: edges
   };
-  var options = {layout: {improvedLayout:true},
-                 physics:{enabled:true} };
+  var options = {layout:{improvedLayout:true},
+                 physics:{enabled:true,
+                          repulsion:{nodeDistance:300}},
+                 interaction:{hover:true},
+
+                 nodes: {
+                   shape: 'box',
+                   font: { size: 10, color: 'black'},
+                   borderWidth: 2
+                 },
+
+                 edges: {width: 1}
+
+                 };
   var network = new vis.Network(container, data, options);
+
   network.on(\"doubleClick\", function (params) {
            collapse_uncollapse_node(parseInt(params.nodes));
     });
@@ -167,34 +197,6 @@ set_node_ids_children(Ch) ->
           C#tree{children=set_node_ids_children(C#tree.children)} 
       end || C <- ChWithId ].
 
-prune_graph_on_number_of_nodes(T = #tree{children=[]}, _) ->
-    T;
-prune_graph_on_number_of_nodes(T = #tree{id=Id, children=Ch}, MaxNodes) ->
-    LastChild = last_child(T),
-    case shall_we_prune(LastChild, MaxNodes) of
-        true ->
-            Ch2 = remove_all_children(Ch),
-            T#tree{children = Ch2};
-        false ->
-            case shall_we_prune(last_child(LastChild), MaxNodes) of
-                true ->
-                    Ch2 = remove_all_children(Ch),
-                    T#tree{children = Ch2};
-                false ->
-                    Ch2 = [ prune_graph_on_number_of_nodes(C, MaxNodes) || C <- Ch ],
-                    T#tree{children = Ch2}
-            end
-    end.
-
-shall_we_prune(T, MaxNodes) ->
-    T#tree.id > MaxNodes.
-
-last_child(#tree{children=Ch}) ->
-    lists:last(Ch).
-
-remove_all_children(Ch) ->
-    [ C#tree{children = []} || C <- Ch ].
-
 generate_node_data_set(T=#tree{children=Ch}) ->
     S = generate_one_node(T),
     ChDataSet = [ generate_node_data_set(C) || C <- Ch],
@@ -211,7 +213,9 @@ generate_edges_data_set(T=#tree{id=Id, children=Ch}) ->
     Edges ++ ChEdges.
 
 generate_one_node(#tree{id=Id, name=Name, quality=Q, 
-                        children=Ch, render=Render, collapsed=Collapsed}) ->
+                        children=Ch, render=Render, collapsed=Collapsed,
+                        quality_penalty=QP
+                       }) ->
     Color = quality_to_color(Q),
     #node{id=Id, 
           name=filename:basename(Name), 
@@ -219,7 +223,8 @@ generate_one_node(#tree{id=Id, name=Name, quality=Q,
           color=Color, 
           children_ids=[C#tree.id||C<-Ch],
           render=Render,
-          collapsed=Collapsed
+          collapsed=Collapsed,
+          quality_penalty=QP
          }.
 
 generate_one_edge(Id, ChId) ->
@@ -234,16 +239,25 @@ quality_to_color(N) ->
     {R, G, B}.
 
 to_node_string(L) ->
-    S = [ nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', children_ids: ~w, collapsed:~p}", 
+    S = [ nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', children_ids: ~w, collapsed:~p, title:\"~s\", mass:~p}", 
                   [N#node.id,
                    N#node.name,
                    round(N#node.quality),
                    rgba(N#node.color),
                    N#node.children_ids,
-                   N#node.collapsed
+                   N#node.collapsed,
+                   quality_penalty_to_title(N#node.quality_penalty),
+                   quality_to_mass(N#node.quality)
                   ])
          || N <- L],
     string:join(S, ",\n").
+
+
+quality_to_mass(Q) ->
+    round(10 - (10 / abs(100-Q))).
+
+quality_penalty_to_title(QP) ->
+    string:join([ lists:flatten(io_lib:format("~p: ~p",[K,V])) || {K,V}<-QP],"</br> ").
 
 to_edge_string(L) ->
     S = [nice_str("{from: ~p, to: ~p, color:'black'}", 
@@ -267,7 +281,9 @@ new_unique_id() ->
     put(unique_id, New),
     New.
 
-
+%% ===================================================================================
+%% ===================================================================================
+%% ===================================================================================
 
 
 sgc_dirs(RootDir) ->
@@ -293,7 +309,6 @@ adjust_paths(Root) ->
 
 add_path(Path) ->
     code:add_pathz(Path).
-
 
 
 generate_all(#tree{children=[]}) ->
