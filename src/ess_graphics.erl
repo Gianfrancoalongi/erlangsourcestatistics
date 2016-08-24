@@ -9,7 +9,7 @@
 -record(edge,{id, to}).
 
 t() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/",
+    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg/",
     adjust_paths(RootDir),
     SGC = ess:dir(RootDir),
     SGC2 = ess:quality(SGC),
@@ -239,7 +239,7 @@ quality_to_color(N) ->
     {R, G, B}.
 
 to_node_string(L) ->
-    S = [ nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', children_ids: ~w, collapsed:~p, title:\"~s\", mass:~p}", 
+    S = [ nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', children_ids: ~w, collapsed:~p, title:\"~s\", mass:~p, font:{size:~p, color:'black'}}", 
                   [N#node.id,
                    N#node.name,
                    round(N#node.quality),
@@ -247,14 +247,17 @@ to_node_string(L) ->
                    N#node.children_ids,
                    N#node.collapsed,
                    quality_penalty_to_title(N#node.quality_penalty),
-                   quality_to_mass(N#node.quality)
+                   quality_to_mass(N#node.quality),
+                   quality_to_font_size(N#node.quality)
                   ])
          || N <- L],
     string:join(S, ",\n").
 
-
 quality_to_mass(Q) ->
     round(10 - (10 / abs(100-Q))).
+
+quality_to_font_size(Q) ->
+    round(40 - (40 / abs(100-Q))).
 
 quality_penalty_to_title(QP) ->
     string:join([ lists:flatten(io_lib:format("~p: ~p",[K,V])) || {K,V}<-QP],"</br> ").
