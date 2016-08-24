@@ -9,7 +9,7 @@
 -record(edge,{id, to}).
 
 t() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc/src/syf/",
+    RootDir = "/local/scratch/etxpell/proj/sgc/src/",
     adjust_paths(RootDir),
     SGC = ess:dir(RootDir),
     SGC2 = ess:quality(SGC),
