@@ -7,7 +7,7 @@
 -record(edge,{id, to}).
 
 t() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg/src/",
+    RootDir = "/local/scratch/etxpell/proj/sgc/src/",
     adjust_paths(RootDir),
     SGC = ess:dir(RootDir),
     SGC2 = ess:quality(SGC),
@@ -23,7 +23,7 @@ t() ->
     VNDS = to_node_string(VisibleNDS),
     HNDS = to_node_string(HiddenNDS),
     VEDS = to_edge_string(RawEDS),
-    generate_html_page(VNDS, VEDS, HNDS, "").
+    generate_html_page(VNDS, VEDS, HNDS).
 
 mark_collapsed_nodes(L) when is_list(L) ->
     [mark_collapsed_nodes(T) || T <- L];
@@ -43,7 +43,7 @@ mark_first_render(T=#tree{collapsed=true}) ->
 mark_first_render(T=#tree{children=Ch}) ->
     T#tree{render=true, children=mark_first_render(Ch)}.
 
-generate_html_page(NDS, EDS, HIDDEN_NDS, HIDDEN_EDS) ->
+generate_html_page(NDS, EDS, HIDDEN_NDS) ->
     S = "<!doctype html>
 <html><head> <title>Software Quality Graph</title>
   <script type=\"text/javascript\" src=\"http://visjs.org/dist/vis.js\"></script>
@@ -90,10 +90,6 @@ generate_html_page(NDS, EDS, HIDDEN_NDS, HIDDEN_EDS) ->
 
   // create an array with edges
   var edges = new vis.DataSet(["++EDS++"
-  ]);
-
-  // create an array with ALL edges
-  var hidden_nodes = new vis.DataSet(["++HIDDEN_EDS++"
   ]);
 
   // create a network
@@ -244,7 +240,8 @@ quality_to_color(N) ->
     {R, G, B}.
 
 to_node_string(L) ->
-    S = [ nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', children_ids: ~w, collapsed:~p, title:\"~s\", mass:~p, font:{size:~p, color:'black'}}", 
+    S = [ nice_str("{id: ~p, label: \"~s\\n~p\", color: '~s', children_ids: ~w, "
+                    "collapsed:~p, title:\"~s\", mass:~p, font:{size:~p, color:'black'}}",
                   [N#node.id,
                    N#node.name,
                    round(N#node.quality),
@@ -293,24 +290,6 @@ new_unique_id() ->
 %% ===================================================================================
 %% ===================================================================================
 
-
-sgc_dirs(RootDir) ->
-    block_dirs(filename:join(RootDir, "src/sgc"), sgc_blocks()).
-
-syf_dirs(RootDir) ->
-    block_dirs(filename:join(RootDir, "src/syf"), syf_blocks()).
-
-block_dirs(Dir, Blocks) ->
-    [ filename:join([Dir, D, "src"]) || D <- Blocks ].
-
-sgc_blocks() -> 
-    [ b2b, cha, dia, hiw, mph, oab, reg, sgm, sgn, sni, tra, trc ].
-
-syf_blocks() -> 
-    [ blm, ccpc, comte, cpl, ecop, esc,
-      gcp, generic, hcfa, om, omgen, oms, perf, plc, 
-      pmf, pms, rcm, sbm, "sctp/sctp_erl", sip, smm, swm, "sys/sys_erl" ].
-        
 adjust_paths(Root) ->
     add_path("/local/scratch/etxpell/proj/sgc/sgc/ecop/out/").
 
