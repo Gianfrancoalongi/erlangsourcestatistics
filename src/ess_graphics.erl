@@ -6,10 +6,8 @@
               quality_penalty}).
 -record(edge,{id, to}).
 
-t() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc/src/",
-    adjust_paths(RootDir),
-    SGC = ess:dir(RootDir),
+analyse(Path) ->
+    SGC = ess:dir(Path),
     SGC2 = ess:quality(SGC),
     Level = 100,
     SGC3 = prune_tree_on_quality(SGC2, Level),
@@ -24,6 +22,11 @@ t() ->
     HNDS = to_node_string(HiddenNDS),
     VEDS = to_edge_string(RawEDS),
     generate_html_page(VNDS, VEDS, HNDS).
+    
+t() ->
+    RootDir = "/local/scratch/etxpell/proj/sgc/src/",
+    adjust_paths(RootDir),
+    analyse(Path).
 
 mark_collapsed_nodes(L) when is_list(L) ->
     [mark_collapsed_nodes(T) || T <- L];
@@ -285,10 +288,6 @@ new_unique_id() ->
     New = Old+1,
     put(unique_id, New),
     New.
-
-%% ===================================================================================
-%% ===================================================================================
-%% ===================================================================================
 
 adjust_paths(Root) ->
     add_path("/local/scratch/etxpell/proj/sgc/sgc/ecop/out/").
