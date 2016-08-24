@@ -216,7 +216,7 @@ generate_one_node(#tree{id=Id, name=Name, quality=Q,
                        }) ->
     Color = quality_to_color(Q),
     #node{id=Id, 
-          name=filename:basename(Name), 
+          name=replace_pipe_with_slash(filename:basename(Name)),
           quality=Q, 
           color=Color, 
           children_ids=[C#tree.id||C<-Ch],
@@ -224,6 +224,13 @@ generate_one_node(#tree{id=Id, name=Name, quality=Q,
           collapsed=Collapsed,
           quality_penalty=QP
          }.
+
+replace_pipe_with_slash([]) ->
+    [];
+replace_pipe_with_slash([$||T]) ->
+    [$/|replace_pipe_with_slash(T)];
+replace_pipe_with_slash([C|T]) ->
+    [C|replace_pipe_with_slash(T)].
 
 generate_one_edge(Id, ChId) ->
     #edge{id=Id, 
