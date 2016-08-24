@@ -25,14 +25,14 @@ analyse(Path) ->
     
 t() ->
     RootDir = "/local/scratch/etxpell/proj/sgc/src/",
-    adjust_paths(RootDir),
-    analyse(Path).
+    adjust_paths(),
+    analyse(RootDir).
 
 mark_collapsed_nodes(L) when is_list(L) ->
     [mark_collapsed_nodes(T) || T <- L];
-mark_collapsed_nodes(T=#tree{id=Id, children=Ch}) when length(Ch) == 1 ->
+mark_collapsed_nodes(T=#tree{children=Ch}) when length(Ch) == 1 ->
     T#tree{children=mark_collapsed_nodes(Ch)};
-mark_collapsed_nodes(T=#tree{id=Id, children=Ch}) ->
+mark_collapsed_nodes(T=#tree{children=Ch}) ->
     T#tree{children=set_collapsed(Ch)}.
 
 set_collapsed(L) ->
@@ -189,10 +189,7 @@ set_node_ids(T = #tree{children = Ch}) ->
 
 set_node_ids_children(Ch) ->
     ChWithId = [ C#tree{id = new_unique_id()} || C <- Ch ],
-    [ begin
-          Id = C#tree.id,
-          C#tree{children=set_node_ids_children(C#tree.children)} 
-      end || C <- ChWithId ].
+    [ C#tree{children=set_node_ids_children(C#tree.children)} || C <- ChWithId ].
 
 generate_node_data_set(T=#tree{children=Ch}) ->
     S = generate_one_node(T),
@@ -203,7 +200,7 @@ generate_edges_data_set(#tree{children=[]}) ->
     [];
 generate_edges_data_set(#tree{collapsed=true}) ->
     [];
-generate_edges_data_set(T=#tree{id=Id, children=Ch}) ->
+generate_edges_data_set(#tree{id=Id, children=Ch}) ->
     ChIds = [ C#tree.id || C <- Ch, C#tree.quality < 100 ],
     Edges = [ generate_one_edge(Id, ChId) || ChId <- ChIds ],
     ChEdges = [ generate_edges_data_set(C) || C <- Ch],
@@ -289,7 +286,7 @@ new_unique_id() ->
     put(unique_id, New),
     New.
 
-adjust_paths(Root) ->
+adjust_paths() ->
     add_path("/local/scratch/etxpell/proj/sgc/sgc/ecop/out/").
 
 add_path(Path) ->

@@ -2,13 +2,6 @@
 -include("ess.hrl").
 -compile(export_all).
 
-%% Next step
-%%
-%% Differentiate between good and bad. 
-%% There is a problem that all files and modules seem to get the same quality!
-%% 
-
-
 quality(T = #tree{type=function}) ->
     RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV),
@@ -196,7 +189,7 @@ dir(Dir, Opts) ->
     traverse(Tree, ForEachFileFun).
 
 sgc_extra_hrls() ->
-    case file:read_file("/local/scratch/etxpell/proj/erlangsourcestatistics/sbg_inc.conf") of
+    case file:read_file("/home/"++os:getenv("USER")++"/sbg_inc.conf") of
         {error,enoent} ->
             [];
         {ok,Bin} ->
