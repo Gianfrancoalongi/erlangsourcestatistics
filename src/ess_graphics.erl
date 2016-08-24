@@ -9,7 +9,7 @@
 -record(edge,{id, to}).
 
 t() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc/src/sgc/reg/",
+    RootDir = "/local/scratch/etxpell/proj/sgc/src/syf/",
     adjust_paths(RootDir),
     SGC = ess:dir(RootDir),
     SGC2 = ess:quality(SGC),
@@ -307,8 +307,7 @@ syf_blocks() ->
       pmf, pms, rcm, sbm, "sctp/sctp_erl", sip, smm, swm, "sys/sys_erl" ].
         
 adjust_paths(Root) ->
-    EcopDir = filename:join(Root, "syf/ecop/out"),
-    add_path(EcopDir).
+    add_path("/local/scratch/etxpell/proj/sgc/sgc/ecop/out/").
 
 add_path(Path) ->
     code:add_pathz(Path).
