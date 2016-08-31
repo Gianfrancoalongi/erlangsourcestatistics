@@ -2,3 +2,5 @@
 *beam
 /.eunit
 res.data
+out
+ebin
