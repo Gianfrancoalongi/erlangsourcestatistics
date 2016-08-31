@@ -109,8 +109,12 @@ list_dir_full_names(Dir) ->
 mk_fullnames(Dir, Fs) ->
     [ filename:join(Dir, F) || F <- Fs ].
 
-find_hrl_dirs(Dir) ->
+find_hrl_dirs_from_root(Dir) ->
+    OtpIncl = find_hrl_dirs(filename:join([Dir, deps,otp])),
+    Incs = find_hrl_dirs(filename:join([Dir, src])),
+    Incs++OtpIncl.
 
+find_hrl_dirs(Dir) ->
     Fs = list_dir_full_names(Dir),
     IncFiles = files_ending_in_hrl(Fs),
     SubDirs = find_hrl_in_subdirs(subdirs_hrl(Fs)),
@@ -182,25 +186,57 @@ is_string_in_name(Name, String) ->
 dir(Dir) ->
     dir(Dir, []).
 dir(Dir, Opts) ->
-    IncDirs = sgc_extra_hrls() ++ find_hrl_dirs(Dir),
+    RootDir = find_root_dir(Dir),
+    io:format("root dir: ~p~n", [RootDir]),
+    adjust_paths(RootDir),
+    IncDirs = sgc_extra_hrls() ++ find_hrl_dirs_from_root(RootDir),
     IncFile = [{i,IC} || IC <- IncDirs ],
     Tree = find_files(Dir),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
     traverse(Tree, ForEachFileFun).
 
-sgc_extra_hrls() ->
-    case file:read_file("/home/"++os:getenv("USER")++"/sbg_inc.conf") of
-        {error,enoent} ->
-            [];
-        {ok,Bin} ->
-            string:tokens(binary_to_list(Bin),"\n")++
-                ["/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/diameter-0/include/",
-                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/megaco-3.17.0.2/include/",
-                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/xmerl-1.3.6/include/",
-                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/stdlib-1.19.4/include/",
-                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/public_key-0.21/include/",
-                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/ssl-5.3.3/src/"]
+find_root_dir(Dir) ->
+    try find_root_dir2(filename:split(Dir))
+    catch _:_ -> Dir
     end.
+
+find_root_dir2(Dir) ->
+    case is_root_dir(Dir) of
+        true -> filename:join(Dir);
+        _ -> find_root_dir2(up_one(Dir))
+    end.
+
+is_root_dir(Dir) ->
+    dir_exists(Dir++[src,sgc,reg,src]) andalso
+        dir_exists(Dir++[src,syf,sip,src]).
+
+dir_exists(Dir) ->
+    filelib:is_dir(filename:join(Dir)).
+
+up_one(L) -> 
+    %% remove last item
+    rev(tl(rev(L))).
+
+adjust_paths(RootDir) ->
+    add_path(filename:join([RootDir, src, syf, ecop, out])).
+
+add_path(Path) ->
+    code:add_patha(Path).
+
+sgc_extra_hrls() ->
+[].
+    %% case file:read_file("/home/"++os:getenv("USER")++"/sbg_inc.conf") of
+    %%     {error,enoent} ->
+    %%         [];
+    %%     {ok,Bin} ->
+    %%         string:tokens(binary_to_list(Bin),"\n")++
+    %%             ["/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/diameter-0/include/",
+    %%              "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/megaco-3.17.0.2/include/",
+    %%              "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/xmerl-1.3.6/include/",
+    %%              "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/stdlib-1.19.4/include/",
+    %%              "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/public_key-0.21/include/",
+    %%              "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/ssl-5.3.3/src/"]
+    %% end.
 
 traverse_list(L, Fun) when is_list(L) ->
     [ traverse(T, Fun) || T <- L ].
