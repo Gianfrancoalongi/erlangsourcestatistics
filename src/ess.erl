@@ -189,7 +189,7 @@ dir(Dir, Opts) ->
     RootDir = find_root_dir(Dir),
     io:format("root dir: ~p~n", [RootDir]),
     adjust_paths(RootDir),
-    IncDirs = sgc_extra_hrls() ++ find_hrl_dirs_from_root(RootDir),
+    IncDirs = find_hrl_dirs_from_root(RootDir),
     IncFile = [{i,IC} || IC <- IncDirs ],
     Tree = find_files(Dir),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
@@ -218,25 +218,12 @@ up_one(L) ->
     rev(tl(rev(L))).
 
 adjust_paths(RootDir) ->
+    %% This is for parse transforms
     add_path(filename:join([RootDir, src, syf, ecop, out])).
 
 add_path(Path) ->
     code:add_patha(Path).
 
-sgc_extra_hrls() ->
-[].
-    %% case file:read_file("/home/"++os:getenv("USER")++"/sbg_inc.conf") of
-    %%     {error,enoent} ->
-    %%         [];
-    %%     {ok,Bin} ->
-    %%         string:tokens(binary_to_list(Bin),"\n")++
-    %%             ["/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/diameter-0/include/",
-    %%              "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/megaco-3.17.0.2/include/",
-    %%              "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/xmerl-1.3.6/include/",
-    %%              "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/stdlib-1.19.4/include/",
-    %%              "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/public_key-0.21/include/",
-    %%              "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/ssl-5.3.3/src/"]
-    %% end.
 
 traverse_list(L, Fun) when is_list(L) ->
     [ traverse(T, Fun) || T <- L ].
@@ -420,7 +407,7 @@ item_count(#val{n=N}) -> N;
 item_count(X) when is_integer(X) -> 1.
 
 
-analyze_function(AST={function, _, Name, _, _}) ->
+analyze_function(AST={function, _, _Name, _, _}) ->
     #tree{type = function,
           name = make_name(AST),
           raw_values = [{complexity, structural_complexity(AST)},
@@ -431,7 +418,7 @@ analyze_function(AST={function, _, Name, _, _}) ->
                         {variable_steppings, variable_steppings_per_function(AST)}
                        ]}.
 
-make_name(AST = {function, _, Name, Arity, _}) ->
+make_name({function, _, Name, Arity, _}) ->
     list_to_atom(lists:flatten(io_lib:format("~p|~p",[Name, Arity]))).
 
 warning_metric(Warnings) ->
