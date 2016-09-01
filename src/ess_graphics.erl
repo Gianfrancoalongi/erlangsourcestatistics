@@ -10,7 +10,11 @@
 %%
 %% evaluating took: 113100ms
 %%
-
+%%
+%% after parallell opt
+%%
+%% evaluating took: 41090ms
+%%
 
 analyse(Path) ->
     T1 = erlang:monotonic_time(),
