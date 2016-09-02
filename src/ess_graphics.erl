@@ -15,6 +15,10 @@
 %%
 %% evaluating took: 41090ms
 %%
+%% after more parallell opt
+%%
+%% evaluating took: 32052ms
+%%
 
 analyse(Path) ->
     T1 = erlang:monotonic_time(),
@@ -390,7 +394,22 @@ add_path(Path) ->
 i2l(X) when is_list(X) -> X;
 i2l(X) when is_integer(X) -> integer_to_list(X).
 
-seq(Data, [F|L]) -> seq(F(Data), L);
+seq(Data, [F|L]) -> 
+    seq(F(Data), L);
 seq(Data, []) -> Data.
+
+%% seq(Data, L) ->
+%%     seq_w_timing(1, Data, L).
+
+%% seq_w_timing(N, Data, [F|L]) -> 
+%%     T1 = erlang:monotonic_time(),
+%%     NewData = F(Data),
+%%     TDiff = erlang:monotonic_time()-T1,
+%%     UnitPerS = erlang:convert_time_unit(1, seconds, native),
+%%     TDiffMs = round(1000 * TDiff / UnitPerS),
+%%     io:format("seq ~p: ~pms~n", [N, TDiffMs]),
+%%     seq_w_timing(N+1, NewData, L);
+%% seq_w_timing(_, Data, []) -> Data.
+
 
 rev(L) -> lists:reverse(L).
