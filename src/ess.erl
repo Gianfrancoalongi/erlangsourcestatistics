@@ -93,96 +93,6 @@ perfect_measurement() ->
      {line_lengths, 40}
     ].
 
-is_dir_in_test_structure(F) ->
-    case rev(F) of
-        "tset"++_ -> true;
-        _ -> is_string_in_name(F, "/ft/") orelse
-                 is_string_in_name(F, "/st/")
-    end.
-
-list_dir_full_names(Dir) ->
-    case file:list_dir(Dir) of
-        {ok, Fs} -> mk_fullnames(Dir, Fs);
-        _ -> []
-    end.
-
-mk_fullnames(Dir, Fs) ->
-    [ filename:join(Dir, F) || F <- Fs ].
-
-find_hrl_dirs_from_root(Dir) ->
-    OtpIncl = find_hrl_dirs(filename:join([Dir, deps,otp])),
-    Incs = find_hrl_dirs(filename:join([Dir, src])),
-    Incs++OtpIncl.
-
-find_hrl_dirs(Dir) ->
-    Fs = list_dir_full_names(Dir),
-    IncFiles = files_ending_in_hrl(Fs),
-    SubDirs = find_hrl_in_subdirs(subdirs_hrl(Fs)),
-    case IncFiles of
-        [] -> SubDirs;
-        _ -> [Dir | SubDirs]
-    end.
-
-find_hrl_in_subdirs(Dirs) ->
-    lists:concat([ find_hrl_dirs(D) || D <- Dirs ]).
-
-find_files(Dir) ->
-    Fs = list_dir_full_names(Dir),
-    SrcFiles = files_ending_in_erl(Fs),
-    SubDirs = find_in_subdirs(subdirs_src(Fs)),
-    {Dir, SrcFiles, prune_empties(SubDirs)}.
-
-find_in_subdirs(Dirs) ->
-    [ find_files(D) || D <- Dirs ].
-
-prune_empties(L) ->
-    lists:filter(fun is_not_empty/1, L).
-
-is_not_empty({_, [], []}) -> false;
-is_not_empty(_) -> true.
-
-subdirs_src(Fs) ->
-    lists:filter(fun is_valid_src_dir/1, Fs).
-
-subdirs_hrl(Fs) ->
-    lists:filter(fun is_valid_hrl_dir/1, Fs).
-
-is_valid_src_dir(D) ->
-    filelib:is_dir(D) andalso
-        not (is_dir_in_test_structure(D) orelse
-             is_dot_git(D) orelse
-             is_eunit(D) orelse
-             is_sgc_no_walk_dir(D)).
-
-is_valid_hrl_dir(D) ->
-    filelib:is_dir(D) andalso
-        not (is_dir_in_test_structure(D) orelse
-             is_dot_git(D) orelse
-             is_eunit(D) ).
-
-files_ending_in_erl(Fs) ->
-    lists:filter(fun is_erlang_source_file/1, Fs).
-
-files_ending_in_hrl(Fs) ->
-    lists:filter(fun is_erlang_header_file/1, Fs).
-
-is_dot_git(F) ->
-    is_string_in_name(F, "/.git/").
-
-is_eunit(F) ->
-    is_string_in_name(F, "/.eunit").
-
-is_sgc_no_walk_dir(F) ->
-    (is_string_in_name(F, "/workspace") orelse
-     is_string_in_name(F, "/tools") orelse
-     is_string_in_name(F, "/out") orelse
-     is_string_in_name(F, "/deps") orelse
-     is_string_in_name(F, "/comte") orelse
-     is_string_in_name(F, "/bt_support") orelse
-     is_string_in_name(F, "/build") ).
-
-is_string_in_name(Name, String) ->
-    string:str(Name, String) /= 0.
 
 dir(Dir) ->
     dir(Dir, []).
@@ -192,9 +102,8 @@ dir(Dir, Opts) ->
     adjust_paths(RootDir),
     IncDirs = find_hrl_dirs_from_root(RootDir),
     IncFile = [{i,IC} || IC <- IncDirs ],
-    Tree = find_files(Dir),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
-    traverse(Tree, ForEachFileFun).
+    find_files(Dir, ForEachFileFun).
 
 find_root_dir(Dir) ->
     try find_root_dir2(filename:split(Dir))
@@ -226,14 +135,108 @@ add_path(Path) ->
     code:add_patha(Path).
 
 
-traverse_list(L, Fun) when is_list(L) ->
-    [ traverse(T, Fun) || T <- L ].
+find_hrl_dirs_from_root(Dir) ->
+    OtpIncl = find_hrl_dirs(filename:join([Dir, deps,otp])),
+    Incs = find_hrl_dirs(filename:join([Dir, src])),
+    Incs++OtpIncl.
 
-traverse({Dir,Files,SubDirs}, Fun) ->
-    Stats = for_each_file_par(Files, Fun) ++ traverse_list(SubDirs, Fun),
+find_hrl_dirs(Dir) ->
+    Fs = list_dir_full_names(Dir),
+    IncFiles = files_ending_in_hrl(Fs),
+    SubDirs = find_hrl_in_subdirs(subdirs_hrl(Fs)),
+    case IncFiles of
+        [] -> SubDirs;
+        _ -> [Dir | SubDirs]
+    end.
+
+find_hrl_in_subdirs(Dirs) ->
+    lists:concat([ find_hrl_dirs(D) || D <- Dirs ]).
+
+
+subdirs_src(Fs) ->
+    lists:filter(fun is_valid_src_dir/1, Fs).
+
+subdirs_hrl(Fs) ->
+    lists:filter(fun is_valid_hrl_dir/1, Fs).
+
+is_valid_src_dir(D) ->
+    filelib:is_dir(D) andalso
+        not (is_dir_in_test_structure(D) orelse
+             is_dot_git(D) orelse
+             is_eunit(D) orelse
+             is_sgc_no_walk_dir(D)).
+
+is_valid_hrl_dir(D) ->
+    filelib:is_dir(D) andalso
+        not (is_dir_in_test_structure(D) orelse
+             is_dot_git(D) orelse
+             is_eunit(D) ).
+
+files_ending_in_erl(Fs) ->
+    lists:filter(fun is_erlang_source_file/1, Fs).
+
+files_ending_in_hrl(Fs) ->
+    lists:filter(fun is_erlang_header_file/1, Fs).
+
+is_dir_in_test_structure(F) ->
+    case rev(F) of
+        "tset"++_ -> true;
+        _ -> is_string_in_name(F, "/ft/") orelse
+                 is_string_in_name(F, "/st/")
+    end.
+
+list_dir_full_names(Dir) ->
+    case file:list_dir(Dir) of
+        {ok, Fs} -> mk_fullnames(Dir, Fs);
+        _ -> []
+    end.
+
+mk_fullnames(Dir, Fs) ->
+    [ filename:join(Dir, F) || F <- Fs ].
+
+is_dot_git(F) ->
+    is_string_in_name(F, "/.git/").
+
+is_eunit(F) ->
+    is_string_in_name(F, "/.eunit").
+
+is_sgc_no_walk_dir(F) ->
+    (is_string_in_name(F, "/workspace") orelse
+     is_string_in_name(F, "/tools") orelse
+     is_string_in_name(F, "/out") orelse
+     is_string_in_name(F, "/deps") orelse
+     is_string_in_name(F, "/comte") orelse
+     is_string_in_name(F, "/bt_support") orelse
+     is_string_in_name(F, "/build") ).
+
+is_string_in_name(Name, String) ->
+    string:str(Name, String) /= 0.
+
+
+find_files(Dir, ForEachFileFun) ->
+    Fs = list_dir_full_names(Dir),
+    SrcFiles = files_ending_in_erl(Fs),
+    SubDirs = find_in_subdirs_par(subdirs_src(Fs), ForEachFileFun),
+    if (SrcFiles/=[]) andalso (SubDirs/=[]) -> 
+            io:format("Warning, dir contains both source files and dirs: ~p~n",
+                      [Dir]);
+       true -> ok
+    end,
+    Stats = for_each_file_par(SrcFiles, ForEachFileFun) ++ SubDirs,
     #tree{type = dir,
           name = Dir,
           children = Stats}.
+
+find_in_subdirs_par(Dirs, ForEachFileFun) ->
+    Fun = fun(D) -> find_files(D, ForEachFileFun) end,
+    RecData = run_fun_async(Dirs, Fun),
+    prune_empties(receive_answers(RecData)).
+
+prune_empties(L) ->
+    lists:filter(fun is_not_empty/1, L).
+
+is_not_empty({_, [], []}) -> false;
+is_not_empty(_) -> true.
 
 for_each_file_par(Files, Fun) ->
     RecData = run_fun_async(Files, Fun),
