@@ -109,8 +109,12 @@ list_dir_full_names(Dir) ->
 mk_fullnames(Dir, Fs) ->
     [ filename:join(Dir, F) || F <- Fs ].
 
-find_hrl_dirs(Dir) ->
+find_hrl_dirs_from_root(Dir) ->
+    OtpIncl = find_hrl_dirs(filename:join([Dir, deps,otp])),
+    Incs = find_hrl_dirs(filename:join([Dir, src])),
+    Incs++OtpIncl.
 
+find_hrl_dirs(Dir) ->
     Fs = list_dir_full_names(Dir),
     IncFiles = files_ending_in_hrl(Fs),
     SubDirs = find_hrl_in_subdirs(subdirs_hrl(Fs)),
@@ -182,39 +186,71 @@ is_string_in_name(Name, String) ->
 dir(Dir) ->
     dir(Dir, []).
 dir(Dir, Opts) ->
-    IncDirs = sgc_extra_hrls() ++ find_hrl_dirs(Dir),
+    RootDir = find_root_dir(Dir),
+    io:format("root dir: ~p~n", [RootDir]),
+    adjust_paths(RootDir),
+    IncDirs = find_hrl_dirs_from_root(RootDir),
     IncFile = [{i,IC} || IC <- IncDirs ],
     Tree = find_files(Dir),
     ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
     traverse(Tree, ForEachFileFun).
 
-sgc_extra_hrls() ->
-    case file:read_file("/home/"++os:getenv("USER")++"/sbg_inc.conf") of
-        {error,enoent} ->
-            [];
-        {ok,Bin} ->
-            string:tokens(binary_to_list(Bin),"\n")++
-                ["/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/diameter-0/include/",
-                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/megaco-3.17.0.2/include/",
-                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/xmerl-1.3.6/include/",
-                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/stdlib-1.19.4/include/",
-                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/public_key-0.21/include/",
-                 "/vobs/mgwblade/OTP/OTP_LXA11930/sles10_64/lib/ssl-5.3.3/src/"]
+find_root_dir(Dir) ->
+    try find_root_dir2(filename:split(Dir))
+    catch _:_ -> Dir
     end.
+
+find_root_dir2(Dir) ->
+    case is_root_dir(Dir) of
+        true -> filename:join(Dir);
+        _ -> find_root_dir2(up_one(Dir))
+    end.
+
+is_root_dir(Dir) ->
+    dir_exists(Dir++[src,sgc,reg,src]) andalso
+        dir_exists(Dir++[src,syf,sip,src]).
+
+dir_exists(Dir) ->
+    filelib:is_dir(filename:join(Dir)).
+
+up_one(L) -> 
+    %% remove last item
+    rev(tl(rev(L))).
+
+adjust_paths(RootDir) ->
+    %% This is for parse transforms
+    add_path(filename:join([RootDir, src, syf, ecop, out])).
+
+add_path(Path) ->
+    code:add_patha(Path).
+
 
 traverse_list(L, Fun) when is_list(L) ->
     [ traverse(T, Fun) || T <- L ].
 
 traverse({Dir,Files,SubDirs}, Fun) ->
-    Stats = for_each_file(Files, Fun) ++ traverse_list(SubDirs, Fun),
-%    Aggregated = aggregate_trees(Stats),
+    Stats = for_each_file_par(Files, Fun) ++ traverse_list(SubDirs, Fun),
     #tree{type = dir,
           name = Dir,
-%          value = sort(Aggregated),
           children = Stats}.
 
-for_each_file(Files, Fun) ->
-    [ Fun(File) || File <- Files ].
+for_each_file_par(Files, Fun) ->
+    RecData = run_fun_async(Files, Fun),
+    receive_answers(RecData).
+
+run_fun_async(Fs, Fun) ->
+    [run_one_async(F, Fun) || F <- Fs].
+
+run_one_async(F, Fun) ->
+    Me = self(),
+    {spawn(fun() -> 
+                   Res = (catch Fun(F)),
+                   Me ! {self(), Res}
+           end), F}.
+
+receive_answers(L) ->
+    [receive {Pid, Res} -> Res after 150000 -> {timeout, F} end 
+     || {Pid, F} <- L].
 
 is_erlang_source_file(F) ->
     filename:extension(F) == ".erl".
@@ -384,7 +420,7 @@ item_count(#val{n=N}) -> N;
 item_count(X) when is_integer(X) -> 1.
 
 
-analyze_function(AST={function, _, Name, _, _}) ->
+analyze_function(AST={function, _, _Name, _, _}) ->
     #tree{type = function,
           name = make_name(AST),
           raw_values = [{complexity, structural_complexity(AST)},
@@ -395,7 +431,7 @@ analyze_function(AST={function, _, Name, _, _}) ->
                         {variable_steppings, variable_steppings_per_function(AST)}
                        ]}.
 
-make_name(AST = {function, _, Name, Arity, _}) ->
+make_name({function, _, Name, Arity, _}) ->
     list_to_atom(lists:flatten(io_lib:format("~p|~p",[Name, Arity]))).
 
 warning_metric(Warnings) ->
