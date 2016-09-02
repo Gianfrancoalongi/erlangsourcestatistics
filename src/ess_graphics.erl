@@ -22,8 +22,9 @@ analyse(Path) ->
         seq(Path,
             [ fun ess:dir/1,
               fun ess:quality/1,
-              fun print_tree/1,
+              fun set_top_level_name/1,
               fun prune_nodes_with_single_children/1,
+              fun save_csv_file/1,
               fun prune_tree_on_quality/1,
               fun set_tree_ids/1,
               fun mark_collapsed_nodes/1,
@@ -34,17 +35,35 @@ analyse(Path) ->
     io:format("evaluating took: ~pms~n", [TDiffMs]),
     generate_html_page(Tree).
 
-print_tree(T=#tree{name=Name, children=Ch}) ->
-    io:format("tree ~p~n", [T#tree.name]),
-    [io:format("        ~p~n", [C#tree.name]) || C <- Ch],
+set_top_level_name(T=#tree{name=Name}) ->
+    case rev(filename:split(Name)) of
+        ["src", "sgc" | _ ] -> T#tree{name="SBG"};
+        ["src", "is-sbg" | _] -> T#tree{name="SBG"};
+        _ -> T
+    end.
+
+save_csv_file(T) ->
+    L = format_tree("", T),
+    file:write_file("res.csv", list_to_binary(L)),
     T.
 
+format_tree(_Pad, #tree{type=function}) ->
+    [];
+format_tree(Pad, T=#tree{quality=Q, children=Ch}) ->
+    [io_lib:format("~s~s, ~p~n", [Pad, tree_name(T), Q]), 
+     format_tree(Pad++"    ", Ch)];
+format_tree(Pad, L) when is_list(L) ->
+    [format_tree(Pad, C) || C <- L].
+
+tree_name(#tree{type=file, name=Name}) -> filename:basename(Name);
+tree_name(#tree{name=Name}) -> Name.
 
 generate_html_page(Tree) ->
     RawNDS = generate_node_data_set(Tree),
     RawEDS = generate_edges_data_set(Tree),
     {VisibleNDS, HiddenNDS} = split_visible(RawNDS),
     io:format("# nodes: ~p~n", [new_unique_id()]),
+    io:format("~s quality: ~p~n", [Tree#tree.name, Tree#tree.quality]),
     VNDS = to_node_string(VisibleNDS),
     HNDS = to_node_string(HiddenNDS),
     VEDS = to_edge_string(RawEDS),
