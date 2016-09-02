@@ -178,6 +178,7 @@ is_sgc_no_walk_dir(F) ->
      is_string_in_name(F, "/out") orelse
      is_string_in_name(F, "/deps") orelse
      is_string_in_name(F, "/comte") orelse
+     is_string_in_name(F, "/bt_support") orelse
      is_string_in_name(F, "/build") ).
 
 is_string_in_name(Name, String) ->
