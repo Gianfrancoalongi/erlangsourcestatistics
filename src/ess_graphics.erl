@@ -63,6 +63,7 @@ generate_html_page(Tree) ->
     RawEDS = generate_edges_data_set(Tree),
     {VisibleNDS, HiddenNDS} = split_visible(RawNDS),
     io:format("# nodes: ~p~n", [new_unique_id()]),
+    io:format("~s quality: ~p~n", [Tree#tree.name, Tree#tree.quality]),
     VNDS = to_node_string(VisibleNDS),
     HNDS = to_node_string(HiddenNDS),
     VEDS = to_edge_string(RawEDS),
