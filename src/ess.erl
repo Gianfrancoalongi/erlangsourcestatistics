@@ -230,10 +230,8 @@ traverse_list(L, Fun) when is_list(L) ->
 
 traverse({Dir,Files,SubDirs}, Fun) ->
     Stats = for_each_file_par(Files, Fun) ++ traverse_list(SubDirs, Fun),
-%    Aggregated = aggregate_trees(Stats),
     #tree{type = dir,
           name = Dir,
-%          value = sort(Aggregated),
           children = Stats}.
 
 for_each_file_par(Files, Fun) ->
@@ -253,9 +251,6 @@ run_one_async(F, Fun) ->
 receive_answers(L) ->
     [receive {Pid, Res} -> Res after 150000 -> {timeout, F} end 
      || {Pid, F} <- L].
-
-for_each_file(Files, Fun) ->
-    [ Fun(File) || File <- Files ].
 
 is_erlang_source_file(F) ->
     filename:extension(F) == ".erl".

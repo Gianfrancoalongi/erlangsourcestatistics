@@ -208,9 +208,9 @@ generate_html_page(NDS, EDS, HIDDEN_NDS) ->
     file:write_file("res.html", list_to_binary(S)).
 
 prune_nodes_with_single_children(T=#tree{type=dir, children=[OneCh]}) ->
-    NewCh = OneCh#tree.children,
+    NewCh = prune_nodes_with_single_children(OneCh#tree.children),
     io:format("pruning ~p to ~p~n", [OneCh#tree.name, T#tree.name]),
-    prune_nodes_with_single_children(T#tree{children=NewCh});
+    T#tree{children=NewCh};
 prune_nodes_with_single_children(T=#tree{children=Ch}) ->
     T#tree{children=prune_nodes_with_single_children(Ch)};
 prune_nodes_with_single_children(L) when is_list(L) ->
