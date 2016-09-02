@@ -3,5 +3,6 @@
 /.eunit
 res.data
 res.html
+res.csv
 out
 ebin
