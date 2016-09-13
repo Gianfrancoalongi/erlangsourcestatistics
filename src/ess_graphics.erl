@@ -101,6 +101,9 @@ mark_first_render(T=#tree{children=Ch}) ->
     T#tree{render=true, children=mark_first_render(Ch)}.
 
 generate_html_page(NDS, EDS, HIDDEN_NDS) ->
+    ALL_NDS = NDS++ if HIDDEN_NDS==[] -> [];
+                       true -> ","++HIDDEN_NDS
+                    end,
     S = "<!doctype html>
 <html><head> <title>Software Quality Graph</title>
   <script type=\"text/javascript\" src=\"http://visjs.org/dist/vis.js\"></script>
@@ -142,7 +145,7 @@ generate_html_page(NDS, EDS, HIDDEN_NDS) ->
   ]);
 
   // create an array with ALL nodes
-  var all_nodes = new vis.DataSet(["++HIDDEN_NDS++","++NDS++"
+  var all_nodes = new vis.DataSet(["++ALL_NDS++"
   ]);
 
   // create an array with edges
