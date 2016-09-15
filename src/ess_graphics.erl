@@ -21,23 +21,35 @@
 %%
 
 analyse(Path) ->
+    analyse(Path, []).
+analyse(Path, Opts) ->
     T1 = erlang:monotonic_time(),
-    Tree =
-        seq(Path,
-            [ fun ess:dir/1,
-              fun ess:quality/1,
-              fun set_top_level_name/1,
-              fun prune_nodes_with_single_children/1,
-              fun save_csv_file/1,
-              fun prune_tree_on_quality/1,
-              fun set_tree_ids/1,
-              fun mark_collapsed_nodes/1,
-              fun mark_first_render/1]),
+    seq(Path, Opts,
+        [ fun init_timing/1,
+          fun ess:dir/2,
+          fun ess:quality/1,
+          fun set_top_level_name/1,
+          fun save_csv_file/1,
+          fun prune_nodes_with_single_children/1,
+          fun prune_tree_on_quality/1,
+          fun set_tree_ids/1,
+          fun mark_collapsed_nodes/1,
+          fun mark_first_render/1,
+          fun generate_html_page/2,
+          fun print_timing/1
+        ]).
+
+init_timing(Tree) ->
+    put(start_time, erlang:monotonic_time()),
+    Tree.
+
+print_timing(Tree) ->
+    T1 = get(start_time),
     TDiff = erlang:monotonic_time()-T1,
     UnitPerS = erlang:convert_time_unit(1, seconds, native),
     TDiffMs = round(1000 * TDiff / UnitPerS),
     io:format("evaluating took: ~pms~n", [TDiffMs]),
-    generate_html_page(Tree).
+    Tree.
 
 set_top_level_name(T=#tree{name=Name}) ->
     case rev(filename:split(Name)) of
@@ -62,7 +74,7 @@ format_tree(Pad, L) when is_list(L) ->
 tree_name(#tree{type=file, name=Name}) -> filename:basename(Name);
 tree_name(#tree{name=Name}) -> Name.
 
-generate_html_page(Tree) ->
+generate_html_page(Tree, _Opts) ->
     RawNDS = generate_node_data_set(Tree),
     RawEDS = generate_edges_data_set(Tree),
     {VisibleNDS, HiddenNDS} = split_visible(RawNDS),
@@ -397,9 +409,14 @@ add_path(Path) ->
 i2l(X) when is_list(X) -> X;
 i2l(X) when is_integer(X) -> integer_to_list(X).
 
-seq(Data, [F|L]) -> 
-    seq(F(Data), L);
-seq(Data, []) -> Data.
+seq(A1, A2, [F|L]) ->
+    A = case erlang:fun_info(F, arity) of
+            {arity, 1} -> F(A1);
+            {arity, 2} -> F(A1, A2)
+        end,
+    seq(A, A2, L);
+seq(Data, _, []) -> 
+    Data.
 
 %% seq(Data, L) ->
 %%     seq_w_timing(1, Data, L).

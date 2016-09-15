@@ -96,14 +96,67 @@ perfect_measurement() ->
 
 dir(Dir) ->
     dir(Dir, []).
-dir(Dir, Opts) ->
-    RootDir = find_root_dir(Dir),
-    io:format("root dir: ~p~n", [RootDir]),
-    adjust_paths(RootDir),
-    IncDirs = find_hrl_dirs_from_root(RootDir),
-    IncFile = [{i,IC} || IC <- IncDirs ],
-    ForEachFileFun = fun(File) -> file(File, Opts, IncFile) end,
-    find_files(Dir, ForEachFileFun).
+dir(Dir, LineOpts) ->    
+    Opts = find_all_opts([{target_dir, Dir} | LineOpts]),
+    io:format("Opts:~p~n",[Opts]),
+    IncDirs = find_hrl_dirs(Dir, Opts),
+    add_parse_transform_dir(Opts),
+    IncDirOpt = make_inc_compiler_opt(IncDirs),
+    ForEachFileFun = fun(File) -> file(File, Opts, IncDirOpt) end,
+    find_files(Dir, ForEachFileFun, Opts).
+
+make_inc_compiler_opt(L) ->
+    [{i,IC} || IC <- L ].
+
+find_all_opts(LineOpts) ->
+    FileOpts = find_file_opts(LineOpts),
+    lists:ukeysort(1, LineOpts ++ FileOpts).
+
+find_file_opts(LineOpts) ->
+    HomeDir = get_home_dir(),
+    LineOptionDir = gv(conf_dir, LineOpts),
+    TargetDir = gv(target_dir, LineOpts),
+    {Path, Opts} = try_paths_in_order([LineOptionDir,
+                                       TargetDir,
+                                       ".",
+                                       HomeDir]),
+    adjust_relative_include_paths(Path, Opts).
+
+adjust_relative_include_paths(Path, Opts) ->
+    case gv(include_paths, Opts) of
+        undefined ->
+            Opts;
+        IncPaths ->
+            P2 = adjust_relative_paths(Path, IncPaths),
+            [{include_paths, P2} | Opts]
+    end.
+
+adjust_relative_paths(RootPath, Paths) ->
+    Fun = fun(P) ->
+                  case filename:pathtype(P) of 
+                      relative -> filename:join(RootPath, P);
+                      _ -> P 
+                  end
+          end,
+    lists:map(Fun, Paths).
+
+
+get_home_dir() ->
+    User = os:getenv("USER"),
+    filename:join(["/home",User]).
+
+try_paths_in_order([]) ->
+    [];
+try_paths_in_order([undefined|T]) ->
+    try_paths_in_order(T);
+try_paths_in_order([P|T]) ->
+    Path = filename:join(P,"ess.conf"),
+    case file:consult(Path) of
+        {ok, Terms} ->            
+            {P, Terms};
+        _ ->
+            try_paths_in_order(T)
+    end.
 
 find_root_dir(Dir) ->
     try find_root_dir2(filename:split(Dir))
@@ -127,63 +180,53 @@ up_one(L) ->
     %% remove last item
     rev(tl(rev(L))).
 
-adjust_paths(RootDir) ->
-    %% This is for parse transforms
-    add_path(filename:join([RootDir, src, syf, ecop, out])).
-
+add_parse_transform_dir(Opts) ->
+    case gv(parse_transform_beam_dirs, Opts) of
+        Dirs = [[_|_]|_] ->
+            [ add_path(D) || D <- Dirs ];
+        Dir = [_|_] ->
+            add_path(Dir);
+        _ ->
+            ok
+    end.
+        
 add_path(Path) ->
     code:add_patha(Path).
 
-
-find_hrl_dirs_from_root(Dir) ->
-    OtpIncl = find_hrl_dirs(filename:join([Dir, deps,otp])),
-    Incs = find_hrl_dirs(filename:join([Dir, src])),
-    Incs++OtpIncl.
-
-find_hrl_dirs(Dir) ->
-    Fs = list_dir_full_names(Dir),
-    IncFiles = files_ending_in_hrl(Fs),
-    SubDirs = find_hrl_in_subdirs(subdirs_hrl(Fs)),
-    case IncFiles of
-        [] -> SubDirs;
-        _ -> [Dir | SubDirs]
+find_hrl_dirs(Dir, Opts) ->
+    BlackList = gv(exclude_dir_patterns, Opts, []) ++
+                gv(exclude_dir_patterns_during_hrl_search, Opts, []),
+    case gv(include_paths, Opts, []) of
+        [] ->
+            find_dirs(".hrl", Dir, BlackList);
+        Paths ->
+            find_in_subdirs(".hrl", Paths, BlackList)
     end.
 
-find_hrl_in_subdirs(Dirs) ->
-    lists:concat([ find_hrl_dirs(D) || D <- Dirs ]).
+find_dirs(Ext, Dir, BlackList) ->    
+    Fs = list_dir_full_names(Dir),
+    HasFiles = any_file_has_extension(Ext, Fs),
+    WhiteDirs = remove_blacklisted(BlackList, Fs),
+    SubDirs = find_in_subdirs(Ext, WhiteDirs, BlackList),
+    if HasFiles -> [Dir | SubDirs];
+       true -> SubDirs
+    end.
 
+find_in_subdirs(Ext, Dirs, BlackList) ->
+    lists:concat([ find_dirs(Ext, D, BlackList) || D <- Dirs ]).
 
-subdirs_src(Fs) ->
-    lists:filter(fun is_valid_src_dir/1, Fs).
+any_file_has_extension(Ext, Fs) ->
+    lists:any(fun(F) -> filename:extension(F) == Ext end, Fs).
 
-subdirs_hrl(Fs) ->
-    lists:filter(fun is_valid_hrl_dir/1, Fs).
+remove_blacklisted(BlackList, Fs) ->
+    lists:filter(fun(F) -> not is_blacklisted(BlackList, F) end, Fs).
 
-is_valid_src_dir(D) ->
-    filelib:is_dir(D) andalso
-        not (is_dir_in_test_structure(D) orelse
-             is_dot_git(D) orelse
-             is_eunit(D) orelse
-             is_sgc_no_walk_dir(D)).
+is_blacklisted(BlackList, F) ->
+    lists:any(fun(B) -> is_string_in_name(F, B) end, BlackList).
 
-is_valid_hrl_dir(D) ->
-    filelib:is_dir(D) andalso
-        not (is_dir_in_test_structure(D) orelse
-             is_dot_git(D) orelse
-             is_eunit(D) ).
 
 files_ending_in_erl(Fs) ->
     lists:filter(fun is_erlang_source_file/1, Fs).
-
-files_ending_in_hrl(Fs) ->
-    lists:filter(fun is_erlang_header_file/1, Fs).
-
-is_dir_in_test_structure(F) ->
-    case rev(F) of
-        "tset"++_ -> true;
-        _ -> is_string_in_name(F, "/ft/") orelse
-                 is_string_in_name(F, "/st/")
-    end.
 
 list_dir_full_names(Dir) ->
     case file:list_dir(Dir) of
@@ -213,10 +256,16 @@ is_string_in_name(Name, String) ->
     string:str(Name, String) /= 0.
 
 
-find_files(Dir, ForEachFileFun) ->
+find_files(Dir, ForEachFileFun, Opts) ->
+    BlackList = gv(exclude_dir_patterns_during_analysis, Opts, []) ++
+                gv(exclude_dir_patterns, Opts, []),
+    find_files2(Dir, BlackList, ForEachFileFun).
+
+find_files2(Dir, BlackList, ForEachFileFun) ->
     Fs = list_dir_full_names(Dir),
-    SrcFiles = files_ending_in_erl(Fs),
-    SubDirs = find_in_subdirs_par(subdirs_src(Fs), ForEachFileFun),
+    WhiteFs = remove_blacklisted(BlackList, Fs),
+    SrcFiles = files_ending_in_erl(WhiteFs),
+    SubDirs = find_in_subdirs_par(WhiteFs, BlackList, ForEachFileFun),
     if (SrcFiles/=[]) andalso (SubDirs/=[]) -> 
             io:format("Warning, dir contains both source files and dirs: ~p~n",
                       [Dir]);
@@ -227,8 +276,8 @@ find_files(Dir, ForEachFileFun) ->
           name = Dir,
           children = Stats}.
 
-find_in_subdirs_par(Dirs, ForEachFileFun) ->
-    Fun = fun(D) -> find_files(D, ForEachFileFun) end,
+find_in_subdirs_par(Dirs, BlackList, ForEachFileFun) ->
+    Fun = fun(D) -> find_files2(D, BlackList, ForEachFileFun) end,
     RecData = run_fun_async(Dirs, Fun),
     prune_empties(receive_answers(RecData)).
 
@@ -283,7 +332,7 @@ file(F, Opts, IncPaths) ->
              }
     catch 
         _:Err ->
-            io:format("error: file: ~p: ~p~n", [F, Err]),
+            io:format("error: file: ~p~n", [F]),
             undefined
     end.
 
