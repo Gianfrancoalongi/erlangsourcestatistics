@@ -380,8 +380,8 @@ to_edge_string(L) ->
                   ]) || E <- L],
     string:join(S, ",").
     
-rgba({R,G,B}) ->
-    "rgba("++i2l(R)++","++i2l(G)++","++i2l(B)++",1)".
+rgba({R,G,B}) ->    
+    nice_str("rgba(~p,~p,~p,1)", [R, G, B]).
 
 nice_str(F,A) ->
     lists:flatten(io_lib:format(F, A)).
