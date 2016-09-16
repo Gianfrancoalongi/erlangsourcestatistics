@@ -47,10 +47,10 @@ penalty_for(Key, Values) ->
     Penalty = lists:sum([ penalty({K, V}) ||  {K,V} <- Values, K == Key ]),
     {Key, Penalty}.
         
--define(ARITY_MAX, 3).
+-define(ARITY_MAX, 5).
 -define(CLAUSES_MAX, 4).
--define(VARIABLE_STEPPING_MAX, 1).
--define(EXPRESSIONS_PER_FUNCTION_MAX, 10).
+-define(VARIABLE_STEPPING_MAX, 2).
+-define(EXPRESSIONS_PER_FUNCTION_MAX, 20).
 -define(WARNINGS_MAX, 0).
 -define(COMPLEXITY_MAX, 3).
 -define(LINE_LENGTHS_MAX, 60).
@@ -81,18 +81,6 @@ penalty({line_lengths, Val}) -> bounded_max(Val#val.avg, ?LINE_LENGTHS_MAX).
 bounded_max(V1, Target) ->
     V = V1 - Target,
     round( 100 / math:pow(2, (Target/(V*0.25))) ).
-
-
-perfect_measurement() ->
-    [{arity, 2},
-     {clauses, 4},
-     {variable_steppings, 0},
-     {expressions_per_function, 5},
-     {warnings, 0},
-     {complexity, 1},
-     {line_lengths, 40}
-    ].
-
 
 dir(Dir) ->
     dir(Dir, []).
