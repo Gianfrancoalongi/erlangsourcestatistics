@@ -120,16 +120,20 @@ find_file_opts(LineOpts) ->
                                        TargetDir,
                                        ".",
                                        HomeDir]),
-    adjust_relative_include_paths(Path, Opts).
+    io:format("config file ~p~n", [Path]),
+    adjust_all_relative_paths(Path, Opts).
 
-adjust_relative_include_paths(Path, Opts) ->
-    case gv(include_paths, Opts) of
-        undefined ->
-            Opts;
-        IncPaths ->
-            P2 = adjust_relative_paths(Path, IncPaths),
-            [{include_paths, P2} | Opts]
-    end.
+adjust_all_relative_paths(Path, Opts) ->
+    Keys = [include_paths, parse_transform_beam_dirs], 
+    Present = [ K || K <- Keys, gv(K, Opts) =/= undefined ],
+    adjust_relative_paths(Path, Present, Opts).
+                                              
+adjust_relative_paths(RootPath, [K | Keys], Opts) ->
+    RelPaths = gv(K, Opts),
+    P2 = adjust_relative_paths(RootPath, RelPaths),
+    [{K, P2} | adjust_relative_paths(RootPath, Keys, Opts)];
+adjust_relative_paths(_RootPath, [], Opts) ->
+    Opts.
 
 adjust_relative_paths(RootPath, Paths) ->
     Fun = fun(P) ->
@@ -237,21 +241,6 @@ list_dir_full_names(Dir) ->
 mk_fullnames(Dir, Fs) ->
     [ filename:join(Dir, F) || F <- Fs ].
 
-is_dot_git(F) ->
-    is_string_in_name(F, "/.git/").
-
-is_eunit(F) ->
-    is_string_in_name(F, "/.eunit").
-
-is_sgc_no_walk_dir(F) ->
-    (is_string_in_name(F, "/workspace") orelse
-     is_string_in_name(F, "/tools") orelse
-     is_string_in_name(F, "/out") orelse
-     is_string_in_name(F, "/deps") orelse
-     is_string_in_name(F, "/comte") orelse
-     is_string_in_name(F, "/bt_support") orelse
-     is_string_in_name(F, "/build") ).
-
 is_string_in_name(Name, String) ->
     string:str(Name, String) /= 0.
 
@@ -318,13 +307,13 @@ get_all_files(Folder) ->
 
 file(F, Opts, IncPaths) ->
     try
-        io:format("  f: ~s~n", [F]),
         CompileOpts = get_compile_options(),
         {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPaths),
         {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
             beam_lib:chunks(Bin,[abstract_code]),
         RawValues = file_raw_values(Warnings, F, Opts),
         RawChildren = analyse_functions(AST, Opts),
+        io:format("  f: ~s: ok~n", [F]),
         #tree{type = file,
               name = F,
               raw_values = RawValues,
@@ -332,10 +321,24 @@ file(F, Opts, IncPaths) ->
              }
     catch 
         _:Err ->
-            io:format("error: file: ~p~n", [F]),
+            io:format("  f: ~s: error: ~p~n", [F, error_digest(Err)]),
+            log_error(F, Err),
             undefined
     end.
 
+error_digest({badmatch, {error, [{_, [{_,epp, {include, file, IncFile}}|_]}|_],_}
+             }) ->
+    "missing_include: "++IncFile;
+error_digest(_) ->
+    "error".
+
+%% {badmatch,
+%%  {error,[{"/local/scratch/etxpell/proj/sgc/src/sgc/reg/src/regSbServ.erl",[{79,epp,{include,file,"reg.hrl"}},{158,epp,{undefined,'DBG',2}},{192,epp,{undefined,'ERRCNT',2}},{214,epp,{undefined,'ERRDBG',2}}]},{"/local/scratch/etxpell/proj/sgc/src/sgc/reg/src/regSbServ.erl",[{71,erl_lint,{undefined_function,{handle_info,2}}},{188,erl_lint,{undefined_function,{sneak_replic_data,2}}}]}],[]}
+%%  }
+
+log_error(F, Err) ->
+    Message = io_lib:format("~p ~p ~n", [F, Err]),
+    file:write_file("/tmp/ess_errors.log", Message, [append]).
     
 get_all_values(K, Proplist) ->
     [ V || {Key,V} <- Proplist, Key == K ].
