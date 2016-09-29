@@ -314,7 +314,7 @@ file(F, Opts, IncPaths) ->
     catch 
         _:Err ->
             io:format("  f: ~s: error: ~p~n", [F, error_digest(Err)]),
-            log("f: ~p ~p",[F, Err]),
+            log("f: ~p ~p~n",[F, Err]),
             undefined
     end.
 
