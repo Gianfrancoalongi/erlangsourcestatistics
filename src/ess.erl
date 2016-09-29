@@ -314,7 +314,7 @@ file(F, Opts, IncPaths) ->
     catch 
         _:Err ->
             io:format("  f: ~s: error: ~p~n", [F, error_digest(Err)]),
-            log(F, Err),
+            log("f: ~p ~p",[F, Err]),
             undefined
     end.
 
@@ -323,11 +323,6 @@ error_digest({badmatch, {error, [{_, [{_,epp, {include, file, IncFile}}|_]}|_],_
     "missing_include: "++IncFile;
 error_digest(_) ->
     "error".
-
-%% {badmatch,
-%%  {error,[{"/local/scratch/etxpell/proj/sgc/src/sgc/reg/src/regSbServ.erl",[{79,epp,{include,file,"reg.hrl"}},{158,epp,{undefined,'DBG',2}},{192,epp,{undefined,'ERRCNT',2}},{214,epp,{undefined,'ERRDBG',2}}]},{"/local/scratch/etxpell/proj/sgc/src/sgc/reg/src/regSbServ.erl",[{71,erl_lint,{undefined_function,{handle_info,2}}},{188,erl_lint,{undefined_function,{sneak_replic_data,2}}}]}],[]}
-%%  }
-
 
 reset_log() ->
     file:delete("/tmp/ess_errors.log").
@@ -473,15 +468,124 @@ item_count(X) when is_integer(X) -> 1.
 
 
 analyze_function(AST={function, _, _Name, _, _}) ->
+    NCR = {naming_convention_remarks, naming_convention(AST)},
     #tree{type = function,
           name = make_name(AST),
-          raw_values = [{complexity, structural_complexity(AST)},
+          raw_values = [
+                        {complexity, structural_complexity(AST)},
                         {expressions_per_function, lines_per_function(AST)},
                         {clauses, clauses_per_function(AST)},
                         {arity, function_arity(AST)},
                         {expressions_per_line, expressions_per_function_line(AST)},
                         {variable_steppings, variable_steppings_per_function(AST)}
                        ]}.
+
+naming_convention({function, _, Name, _, Clauses}) ->
+    FH = snake_case(Name),
+    FH + naming_convention(Clauses);
+naming_convention(L) when is_list(L) ->
+    lists:sum([naming_convention(X) || X <- L]);
+naming_convention({clause, _, Match, Guards, Exprs}) ->
+    lists:sum([naming_convention(Match),
+               naming_convention(Guards),
+               naming_convention(Exprs)]);
+naming_convention({match,_,RHS,LHS}) ->
+    lists:sum(naming_convention(RHS) , naming_convention(LHS));
+naming_convention({call,_, _, _Args}) ->
+    0;
+naming_convention({bin,_, Elems}) ->
+    naming_convention(Elems);
+naming_convention({bin_element,_, Elem, _, _}) ->
+    naming_convention(Elem);
+naming_convention({'case',_, Expr, Clauses}) ->
+    lists:sum(naming_convention(Expr), naming_convention(Clauses));
+naming_convention({'if',_, Clauses}) ->
+    naming_convention(Clauses);
+naming_convention({'receive',_,Clauses}) ->
+    naming_convention(Clauses);
+naming_convention({'receive',_,Clauses, _, AfterExprs}) ->
+    lists:sum(naming_convention(Clauses), naming_convention(AfterExprs));
+naming_convention({cons,_,Hd, Tl}) ->
+    lists:sum(naming_convention(Hd) , naming_convention(Tl));
+naming_convention({record,_,_,Fields}) ->
+    naming_convention(Fields);
+naming_convention({record,_,Var,_,RecordField}) ->
+    lists:sum(naming_convention(Var), naming_convention(RecordField));
+naming_convention({record_field,_,_,Expr}) ->
+    naming_convention(Expr);
+naming_convention({record_field,_,Expr1,_,Expr2}) ->
+    lists:sum(naming_convention(Expr1), naming_convention(Expr2));
+naming_convention({record_index,_,_,Expr}) ->
+    naming_convention(Expr);
+naming_convention({tuple,_,Elements}) ->
+    naming_convention(Elements);
+naming_convention({op,_,_,LHS,RHS}) ->
+    lists:sum(naming_convention(LHS), naming_convention(RHS));
+naming_convention({op,_,_,Expr}) ->
+    naming_convention(Expr);
+naming_convention({lc,_,Body,Generator}) ->
+    lists:sum(naming_convention(Body), naming_convention(Generator));
+naming_convention({generate,_,Expr,Guards}) ->
+    lists:sum(naming_convention(Expr), naming_convention(Guards));
+naming_convention({b_generate,_,Expr,Guards}) ->
+    lists:sum(naming_convention(Expr), naming_convention(Guards));
+naming_convention({'catch',_,CallExpr}) ->
+    naming_convention(CallExpr);
+naming_convention({'fun',_,Expr}) ->
+    naming_convention(Expr);
+naming_convention({clauses,Clauses}) ->
+    naming_convention(Clauses);
+naming_convention({'try',_,CallExprs,_,Exprs,_})->
+    lists:sum(naming_convention(CallExprs), naming_convention(Exprs));
+naming_convention({block, _, CallExprs}) ->
+    naming_convention(CallExprs);
+naming_convention({bc,_,Body,Generator}) ->
+    lists:sum(naming_convention(Body), naming_convention(Generator));
+
+naming_convention({function,_,_}) -> 0;
+naming_convention({function,_,_,_}) -> 0;
+naming_convention({nil,_}) -> 0;
+naming_convention({atom,_,A}) -> snake_case(A);
+naming_convention({var,_,V}) -> camel_case(V);
+naming_convention({string,_,_}) -> 0;
+naming_convention({integer,_,_}) -> 0;
+naming_convention({float,_,_}) -> 0;
+naming_convention({char,_,_}) -> 0. 
+
+
+snake_case(Input) ->
+    case is_snake_cased(to_string(Input)) of
+        true -> 0;
+        _ ->
+            io:format("     s: ~p not snake_cased~n",[Input]), 
+            1
+    end.
+
+is_snake_cased(String) -> 
+    OnlyLowerCase = string:to_lower(String) == String,
+    HasUnderscore = lists:member($_, String),
+    OnlyLowerCase or HasUnderscore.
+
+camel_case(Input) ->
+    case is_camel_cased(to_string(Input)) of
+        true -> 0;
+        _ -> 
+            io:format("     c: ~p not CamelCased~n",[Input]),
+            1
+    end.
+
+is_camel_cased([$_|_]) -> 
+    true;
+is_camel_cased(String) when length(String) > 3 -> 
+    HasUpperCase = string:to_lower(String) /= String,
+    HasLowerCase = string:to_upper(String) /= String,
+    HasUnderscore = lists:member($_, String),
+    HasUpperCase andalso HasLowerCase andalso not HasUnderscore;
+is_camel_cased(_) ->
+    true.
+
+to_string(X) when is_atom(X) -> atom_to_list(X);
+to_string(X) when is_list(X) -> X.
 
 make_name({function, _, Name, Arity, _}) ->
     list_to_atom(lists:flatten(io_lib:format("~p|~p",[Name, Arity]))).
