@@ -33,7 +33,8 @@ key_sum(Proplist) ->
     [ {K, lists:sum(get_all_values(K,Proplist))} || K <- Keys ].
     
 calculate_quality_penalty(RawValues) ->
-    Keys = [arity,
+    Keys = [naming_convention_remarks,
+            arity,
             clauses,
             variable_steppings,
             expressions_per_function,
@@ -47,6 +48,7 @@ penalty_for(Key, Values) ->
     Penalty = lists:sum([ penalty({K, V}) ||  {K,V} <- Values, K == Key ]),
     {Key, Penalty}.
         
+-define(NAMING_CONVENTION_MAX, 2).
 -define(ARITY_MAX, 5).
 -define(CLAUSES_MAX, 4).
 -define(VARIABLE_STEPPING_MAX, 2).
@@ -56,6 +58,9 @@ penalty_for(Key, Values) ->
 -define(LINE_LENGTHS_MAX, 60).
 
 penalty({_, undefined}) -> 0;
+
+penalty({naming_convention_remarks, V}) when V =< ?NAMING_CONVENTION_MAX -> 0;
+penalty({naming_convention_remarks, V}) -> bounded_max(V, ?NAMING_CONVENTION_MAX);
 
 penalty({arity, V}) when V =< ?ARITY_MAX -> 0;
 penalty({arity, V}) -> bounded_max(V, ?ARITY_MAX);
@@ -467,11 +472,10 @@ item_count(#val{n=N}) -> N;
 item_count(X) when is_integer(X) -> 1.
 
 
-analyze_function(AST={function, _, _Name, _, _}) ->
-    NCR = {naming_convention_remarks, naming_convention(AST)},
+analyze_function(AST={function, _, _Name, _, _}) ->    
     #tree{type = function,
           name = make_name(AST),
-          raw_values = [
+          raw_values = [{naming_convention_remarks, naming_convention(AST, false)},
                         {complexity, structural_complexity(AST)},
                         {expressions_per_function, lines_per_function(AST)},
                         {clauses, clauses_per_function(AST)},
@@ -480,98 +484,122 @@ analyze_function(AST={function, _, _Name, _, _}) ->
                         {variable_steppings, variable_steppings_per_function(AST)}
                        ]}.
 
-naming_convention({function, _, Name, _, Clauses}) ->
+naming_convention({function, _, Name, _, Clauses}, FromMatch) ->
     FH = snake_case(Name),
-    FH + naming_convention(Clauses);
-naming_convention(L) when is_list(L) ->
-    lists:sum([naming_convention(X) || X <- L]);
-naming_convention({clause, _, Match, Guards, Exprs}) ->
-    lists:sum([naming_convention(Match),
-               naming_convention(Guards),
-               naming_convention(Exprs)]);
-naming_convention({match,_,RHS,LHS}) ->
-    lists:sum(naming_convention(RHS) , naming_convention(LHS));
-naming_convention({call,_, _, _Args}) ->
-    0;
-naming_convention({bin,_, Elems}) ->
-    naming_convention(Elems);
-naming_convention({bin_element,_, Elem, _, _}) ->
-    naming_convention(Elem);
-naming_convention({'case',_, Expr, Clauses}) ->
-    lists:sum(naming_convention(Expr), naming_convention(Clauses));
-naming_convention({'if',_, Clauses}) ->
-    naming_convention(Clauses);
-naming_convention({'receive',_,Clauses}) ->
-    naming_convention(Clauses);
-naming_convention({'receive',_,Clauses, _, AfterExprs}) ->
-    lists:sum(naming_convention(Clauses), naming_convention(AfterExprs));
-naming_convention({cons,_,Hd, Tl}) ->
-    lists:sum(naming_convention(Hd) , naming_convention(Tl));
-naming_convention({record,_,_,Fields}) ->
-    naming_convention(Fields);
-naming_convention({record,_,Var,_,RecordField}) ->
-    lists:sum(naming_convention(Var), naming_convention(RecordField));
-naming_convention({record_field,_,_,Expr}) ->
-    naming_convention(Expr);
-naming_convention({record_field,_,Expr1,_,Expr2}) ->
-    lists:sum(naming_convention(Expr1), naming_convention(Expr2));
-naming_convention({record_index,_,_,Expr}) ->
-    naming_convention(Expr);
-naming_convention({tuple,_,Elements}) ->
-    naming_convention(Elements);
-naming_convention({op,_,_,LHS,RHS}) ->
-    lists:sum(naming_convention(LHS), naming_convention(RHS));
-naming_convention({op,_,_,Expr}) ->
-    naming_convention(Expr);
-naming_convention({lc,_,Body,Generator}) ->
-    lists:sum(naming_convention(Body), naming_convention(Generator));
-naming_convention({generate,_,Expr,Guards}) ->
-    lists:sum(naming_convention(Expr), naming_convention(Guards));
-naming_convention({b_generate,_,Expr,Guards}) ->
-    lists:sum(naming_convention(Expr), naming_convention(Guards));
-naming_convention({'catch',_,CallExpr}) ->
-    naming_convention(CallExpr);
-naming_convention({'fun',_,Expr}) ->
-    naming_convention(Expr);
-naming_convention({clauses,Clauses}) ->
-    naming_convention(Clauses);
-naming_convention({'try',_,CallExprs,_,Exprs,_})->
-    lists:sum(naming_convention(CallExprs), naming_convention(Exprs));
-naming_convention({block, _, CallExprs}) ->
-    naming_convention(CallExprs);
-naming_convention({bc,_,Body,Generator}) ->
-    lists:sum(naming_convention(Body), naming_convention(Generator));
+    FH + naming_convention(Clauses, FromMatch);
+naming_convention(L, FromMatch) when is_list(L) ->
+    sum([naming_convention(X, FromMatch) || X <- L]);
+naming_convention({clause, _, Match, Guards, Exprs}, FromMatch) ->
+    sum([naming_convention(Match, FromMatch),
+         naming_convention(Guards, FromMatch),
+         naming_convention(Exprs, FromMatch)]);
+naming_convention({match,_,LHS, RHS}, FromMatch) ->
+    sum(naming_convention(LHS, true),
+        naming_convention(LHS, FromMatch));
+naming_convention({call,_, _, Args}, FromMatch) ->
+    naming_convention(Args, FromMatch);
+naming_convention({bin,_, Elems}, FromMatch) ->
+    naming_convention(Elems, FromMatch);
+naming_convention({bin_element,_, Elem, _, _}, FromMatch) ->
+    naming_convention(Elem, FromMatch);
+naming_convention({'case',_, Expr, Clauses}, FromMatch) ->
+    sum(naming_convention(Expr, FromMatch),
+        naming_convention(Clauses, FromMatch));
+naming_convention({'if',_, Clauses}, FromMatch) ->
+    naming_convention(Clauses, FromMatch);
+naming_convention({'receive',_,Clauses}, FromMatch) ->
+    naming_convention(Clauses, FromMatch);
+naming_convention({'receive',_,Clauses, _, AfterExprs}, FromMatch) ->
+    sum(naming_convention(Clauses, FromMatch), 
+        naming_convention(AfterExprs, FromMatch));
+naming_convention({cons,_,Hd, Tl}, FromMatch) ->
+    sum(naming_convention(Hd, FromMatch) , 
+        naming_convention(Tl, FromMatch));
+naming_convention({record,_,_,Fields}, FromMatch) ->
+    naming_convention(Fields, FromMatch);
+naming_convention({record,_,Var,_,RecordField}, FromMatch) ->
+    sum(naming_convention(Var, FromMatch), 
+        naming_convention(RecordField, FromMatch));
+naming_convention({record_field,_,_,Expr}, FromMatch) ->
+    naming_convention(Expr, FromMatch);
+naming_convention({record_field,_,Expr1,_,Expr2}, FromMatch) ->
+    sum(naming_convention(Expr1, FromMatch),
+        naming_convention(Expr2, FromMatch));
+naming_convention({record_index,_,_, Expr}, FromMatch) ->
+    naming_convention(Expr, FromMatch);
+naming_convention({tuple,_,Elements}, FromMatch) ->
+    naming_convention(Elements, FromMatch);
+naming_convention({op,_,_,LHS,RHS}, FromMatch) ->
+    sum(naming_convention(LHS, FromMatch), 
+        naming_convention(RHS, FromMatch));
+naming_convention({op,_,_,Expr}, FromMatch) ->
+    naming_convention(Expr, FromMatch);
+naming_convention({lc,_,Body,Generator}, FromMatch) ->
+    sum(naming_convention(Body, FromMatch), 
+        naming_convention(Generator, FromMatch));
+naming_convention({generate,_,Expr,Guards}, FromMatch) ->
+    sum(naming_convention(Expr, FromMatch), 
+        naming_convention(Guards, FromMatch));
+naming_convention({b_generate,_,Expr,Guards}, FromMatch) ->
+    sum(naming_convention(Expr, FromMatch), 
+        naming_convention(Guards, FromMatch));
+naming_convention({'catch',_,CallExpr}, FromMatch) ->
+    naming_convention(CallExpr, FromMatch);
+naming_convention({'fun',_,Expr}, FromMatch) ->
+    naming_convention(Expr, FromMatch);
+naming_convention({clauses,Clauses}, FromMatch) ->
+    naming_convention(Clauses, FromMatch);
+naming_convention({'try',_,CallExprs,_,Exprs,_}, FromMatch)->
+    sum(naming_convention(CallExprs, FromMatch), 
+        naming_convention(Exprs, FromMatch));
+naming_convention({block, _, CallExprs}, FromMatch) ->
+    naming_convention(CallExprs, FromMatch);
+naming_convention({bc,_,Body,Generator}, FromMatch) ->
+    sum(naming_convention(Body, FromMatch), 
+        naming_convention(Generator, FromMatch));
 
-naming_convention({function,_,_}) -> 0;
-naming_convention({function,_,_,_}) -> 0;
-naming_convention({nil,_}) -> 0;
-naming_convention({atom,_,A}) -> snake_case(A);
-naming_convention({var,_,V}) -> camel_case(V);
-naming_convention({string,_,_}) -> 0;
-naming_convention({integer,_,_}) -> 0;
-naming_convention({float,_,_}) -> 0;
-naming_convention({char,_,_}) -> 0. 
+naming_convention({var,_,V}, true) -> camel_case(V);
+naming_convention({atom,N,A}, _) -> snake_case(A);
+
+naming_convention({function,_,_}, _) -> 0;
+naming_convention({function,_,_,_}, _) -> 0;
+naming_convention({nil,_}, _) -> 0;
+naming_convention({var,_,V}, _) -> 0;
+naming_convention({string,_,_}, _) -> 0;
+naming_convention({integer,_,_}, _) -> 0;
+naming_convention({float,_,_}, _) -> 0;
+naming_convention({char,_,_}, _) -> 0. 
 
 
 snake_case(Input) ->
     case is_snake_cased(to_string(Input)) of
         true -> 0;
-        _ ->
-            io:format("     s: ~p not snake_cased~n",[Input]), 
-            1
+        _ -> 1
     end.
 
 is_snake_cased(String) -> 
     OnlyLowerCase = string:to_lower(String) == String,
     HasUnderscore = lists:member($_, String),
-    OnlyLowerCase or HasUnderscore.
+    IMN = is_module_name(String),
+    OnlyLowerCase or HasUnderscore or IMN.
 
+is_module_name(String) ->
+    index_of_first_uppercase(String) =< 4.
+
+index_of_first_uppercase(S) ->
+    index_of_first_uppercase(1, S).
+
+index_of_first_uppercase(_, []) ->
+    0;
+index_of_first_uppercase(Ix, [C|Cs]) when C =< $Z, C >= $A ->
+    Ix;
+index_of_first_uppercase(Ix, [_|Cs]) ->
+    index_of_first_uppercase(Ix+1, Cs).
+    
 camel_case(Input) ->
     case is_camel_cased(to_string(Input)) of
         true -> 0;
-        _ -> 
-            io:format("     c: ~p not CamelCased~n",[Input]),
-            1
+        _ ->  1
     end.
 
 is_camel_cased([$_|_]) -> 
@@ -833,6 +861,7 @@ sort(L) -> lists:sort(L).
 
 usort(L) -> lists:usort(L).
     
+sum(A, B) -> A+B.
 sum(L) -> lists:sum(L).
 
 max([]) -> 0;
