@@ -86,10 +86,14 @@ dir(Dir) ->
     dir(Dir, []).
 dir(Dir, LineOpts) ->    
     Opts = find_all_opts([{target_dir, Dir} | LineOpts]),
-    io:format("Opts:~p~n",[Opts]),
     IncDirs = find_hrl_dirs(Dir, Opts),
     add_parse_transform_dir(Opts),
     IncDirOpt = make_inc_compiler_opt(IncDirs),
+
+    reset_log(),
+    log("options:~p~n"
+        "incdirs:~p~n",[Opts, IncDirOpt]),
+    
     ForEachFileFun = fun(File) -> file(File, Opts, IncDirOpt) end,
     find_files(Dir, ForEachFileFun, Opts).
 
@@ -310,7 +314,7 @@ file(F, Opts, IncPaths) ->
     catch 
         _:Err ->
             io:format("  f: ~s: error: ~p~n", [F, error_digest(Err)]),
-            log_error(F, Err),
+            log(F, Err),
             undefined
     end.
 
@@ -324,8 +328,12 @@ error_digest(_) ->
 %%  {error,[{"/local/scratch/etxpell/proj/sgc/src/sgc/reg/src/regSbServ.erl",[{79,epp,{include,file,"reg.hrl"}},{158,epp,{undefined,'DBG',2}},{192,epp,{undefined,'ERRCNT',2}},{214,epp,{undefined,'ERRDBG',2}}]},{"/local/scratch/etxpell/proj/sgc/src/sgc/reg/src/regSbServ.erl",[{71,erl_lint,{undefined_function,{handle_info,2}}},{188,erl_lint,{undefined_function,{sneak_replic_data,2}}}]}],[]}
 %%  }
 
-log_error(F, Err) ->
-    Message = io_lib:format("~p ~p ~n", [F, Err]),
+
+reset_log() ->
+    file:delete("/tmp/ess_errors.log").
+
+log(Fmt, Args) ->
+    Message = io_lib:format(Fmt, Args),
     file:write_file("/tmp/ess_errors.log", Message, [append]).
     
 get_all_values(K, Proplist) ->
