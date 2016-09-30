@@ -2,26 +2,26 @@
 -include("ess.hrl").
 -compile(export_all).
 
-quality(T = #tree{type=function}) ->
+quality(T = #tree{type=function}, Opts) ->
     RV = T#tree.raw_values,
-    QP = calculate_quality_penalty(RV),
+    QP = calculate_quality_penalty(RV, Opts),
     T#tree{quality_penalty = QP,
            quality = 100 - lists:sum([V||{_,V}<-QP])
           };
-quality(T = #tree{type=file}) ->
+quality(T = #tree{type=file}, Opts) ->
     CS = T#tree.children,
-    CS2 = [ quality(C) || C <- CS],
+    CS2 = [ quality(C, Opts) || C <- CS],
     CQP = lists:flatten([ C#tree.quality_penalty || C <- CS2 ]),
     RV = T#tree.raw_values,
-    QP = calculate_quality_penalty(RV),
+    QP = calculate_quality_penalty(RV, Opts),
     QP2 = key_sum(QP ++ CQP),
     T#tree{children = CS2,
            quality_penalty = QP2,
            quality = 100 - lists:sum([V||{_,V}<-QP2])
           };
-quality(T = #tree{type=dir}) ->
+quality(T = #tree{type=dir}, Opts) ->
     CS = T#tree.children,
-    CS2 = [ quality(C) || C <- CS],
+    CS2 = [ quality(C, Opts) || C <- CS],
     CQP = lists:flatten([ C#tree.quality_penalty || C <- CS2 ]),
     T#tree{children = CS2,
            quality_penalty = key_sum(CQP),
@@ -32,16 +32,8 @@ key_sum(Proplist) ->
     Keys = lists:usort([K||{K,_}<-Proplist]),
     [ {K, lists:sum(get_all_values(K,Proplist))} || K <- Keys ].
     
-calculate_quality_penalty(RawValues) ->
-    Keys = [naming_convention_remarks,
-            arity,
-            clauses,
-            variable_steppings,
-            expressions_per_function,
-            warnings,
-            complexity,
-            line_lengths
-           ],
+calculate_quality_penalty(RawValues, Opts) ->
+    Keys = gv(metrics, Opts),
     [ penalty_for(K, RawValues) || K <- Keys ].
 
 penalty_for(Key, Values) ->
@@ -59,8 +51,8 @@ penalty_for(Key, Values) ->
 
 penalty({_, undefined}) -> 0;
 
-penalty({naming_convention_remarks, V}) when V =< ?NAMING_CONVENTION_MAX -> 0;
-penalty({naming_convention_remarks, V}) -> bounded_max(V, ?NAMING_CONVENTION_MAX);
+penalty({naming_convention, V}) when V =< ?NAMING_CONVENTION_MAX -> 0;
+penalty({naming_convention, V}) -> bounded_max(V, ?NAMING_CONVENTION_MAX);
 
 penalty({arity, V}) when V =< ?ARITY_MAX -> 0;
 penalty({arity, V}) -> bounded_max(V, ?ARITY_MAX);
@@ -87,10 +79,13 @@ bounded_max(V1, Target) ->
     V = V1 - Target,
     round( 100 / math:pow(2, (Target/(V*0.25))) ).
 
+
+get_options(Dir, CommandLineOpts) ->
+    find_all_opts([{target_dir, Dir} | CommandLineOpts]).
+
 dir(Dir) ->
     dir(Dir, []).
-dir(Dir, LineOpts) ->    
-    Opts = find_all_opts([{target_dir, Dir} | LineOpts]),
+dir(Dir, Opts) ->    
     IncDirs = find_hrl_dirs(Dir, Opts),
     add_parse_transform_dir(Opts),
     IncDirOpt = make_inc_compiler_opt(IncDirs),
@@ -107,7 +102,25 @@ make_inc_compiler_opt(L) ->
 
 find_all_opts(LineOpts) ->
     FileOpts = find_file_opts(LineOpts),
-    lists:ukeysort(1, LineOpts ++ FileOpts).
+    DefaultOptions = get_default_options(),
+    lists:ukeysort(1, LineOpts ++ FileOpts ++ DefaultOptions).
+
+get_default_options() ->
+    [{metrics, [naming_convention,
+                arity,
+                clauses,
+                variable_steppings,
+                expressions_per_function,
+                warnings,
+                complexity,
+                line_lengths]},
+     {include_paths, []},
+     {conf_dir, ""},
+     {exclude_dir_patterns, [".git"]},
+     {exclude_dir_patterns_during_hrl_search, []},
+     {exclude_dir_patterns_during_analysis, []},
+     {parse_transform_beam_dirs, []},
+     {out, "."}].
 
 find_file_opts(LineOpts) ->
     HomeDir = get_home_dir(),
@@ -475,7 +488,7 @@ item_count(X) when is_integer(X) -> 1.
 analyze_function(AST={function, _, _Name, _, _}) ->    
     #tree{type = function,
           name = make_name(AST),
-          raw_values = [{naming_convention_remarks, naming_convention(AST, false)},
+          raw_values = [{naming_convention, naming_convention(AST, false)},
                         {complexity, structural_complexity(AST)},
                         {expressions_per_function, lines_per_function(AST)},
                         {clauses, clauses_per_function(AST)},
