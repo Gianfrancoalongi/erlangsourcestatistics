@@ -22,12 +22,13 @@
 
 analyse(Path) ->
     analyse(Path, []).
-analyse(Path, Opts) ->
+analyse(Path, CommandLineOpts) ->
     T1 = erlang:monotonic_time(),
+    Opts = ess:get_options(Path, CommandLineOpts),
     seq(Path, Opts,
         [ fun init_timing/1,
           fun ess:dir/2,
-          fun ess:quality/1,
+          fun ess:quality/2,
           fun set_top_level_name/1,
           fun save_csv_file/1,
           fun prune_nodes_with_single_children/1,
