@@ -120,7 +120,7 @@ get_default_options() ->
      {exclude_dir_patterns_during_hrl_search, []},
      {exclude_dir_patterns_during_analysis, []},
      {parse_transform_beam_dirs, []},
-     {out, "."}].
+     {out_dir, "./"}].
 
 find_file_opts(LineOpts) ->
     HomeDir = get_home_dir(),
