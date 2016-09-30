@@ -30,7 +30,7 @@ analyse(Path, CommandLineOpts) ->
           fun ess:dir/2,
           fun ess:quality/2,
           fun set_top_level_name/1,
-          fun save_csv_file/1,
+          fun save_csv_file/2,
           fun prune_nodes_with_single_children/1,
           fun prune_tree_on_quality/1,
           fun set_tree_ids/1,
@@ -59,9 +59,10 @@ set_top_level_name(T=#tree{name=Name}) ->
         _ -> T
     end.
 
-save_csv_file(T) ->
+save_csv_file(T, Opts) ->
     L = format_tree("", T),
-    file:write_file("res.csv", list_to_binary(L)),
+    File = filename:join(gv(out_dir, Opts),"res.csv"),
+    file:write_file(File, list_to_binary(L)),
     T.
 
 format_tree(_Pad, #tree{type=function}) ->
@@ -75,7 +76,7 @@ format_tree(Pad, L) when is_list(L) ->
 tree_name(#tree{type=file, name=Name}) -> filename:basename(Name);
 tree_name(#tree{name=Name}) -> Name.
 
-generate_html_page(Tree, _Opts) ->
+generate_html_page(Tree, Opts) ->
     RawNDS = generate_node_data_set(Tree),
     RawEDS = generate_edges_data_set(Tree),
     {VisibleNDS, HiddenNDS} = split_visible(RawNDS),
@@ -84,7 +85,7 @@ generate_html_page(Tree, _Opts) ->
     VNDS = to_node_string(VisibleNDS),
     HNDS = to_node_string(HiddenNDS),
     VEDS = to_edge_string(RawEDS),
-    generate_html_page(VNDS, VEDS, HNDS).
+    generate_html_page(VNDS, VEDS, HNDS, Opts).
 
 split_visible(NDS) ->
     lists:partition(fun(N) -> N#node.render end, NDS).
@@ -113,7 +114,7 @@ mark_first_render(T=#tree{collapsed=true}) ->
 mark_first_render(T=#tree{children=Ch}) ->
     T#tree{render=true, children=mark_first_render(Ch)}.
 
-generate_html_page(NDS, EDS, HIDDEN_NDS) ->
+generate_html_page(NDS, EDS, HIDDEN_NDS, Opts) ->
     ALL_NDS = NDS++ if HIDDEN_NDS==[] -> [];
                        true -> ","++HIDDEN_NDS
                     end,
@@ -244,7 +245,8 @@ generate_html_page(NDS, EDS, HIDDEN_NDS) ->
 </script>
 </body>
 </html>",
-    file:write_file("res.html", list_to_binary(S)).
+    File = filename:join(gv(out_dir, Opts),"res.html"),
+    file:write_file(File, list_to_binary(S)).
 
 prune_nodes_with_single_children(T=#tree{type=dir, children=[OneCh]}) ->
     NewCh = prune_nodes_with_single_children(OneCh#tree.children),
@@ -434,3 +436,8 @@ seq(Data, _, []) ->
 
 
 rev(L) -> lists:reverse(L).
+
+gv(Key, L) ->
+    proplists:get_value(Key, L).
+gv(Key, L, Def) ->
+    proplists:get_value(Key, L, Def).
