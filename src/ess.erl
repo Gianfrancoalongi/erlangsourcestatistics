@@ -31,7 +31,7 @@ quality(T = #tree{type=dir}, Opts) ->
 key_sum(Proplist) ->
     Keys = lists:usort([K||{K,_}<-Proplist]),
     [ {K, lists:sum(get_all_values(K,Proplist))} || K <- Keys ].
-    
+
 calculate_quality_penalty(RawValues, Opts) ->
     Keys = gv(metrics, Opts),
     [ penalty_for(K, RawValues) || K <- Keys ].
@@ -39,7 +39,7 @@ calculate_quality_penalty(RawValues, Opts) ->
 penalty_for(Key, Values) ->
     Penalty = lists:sum([ penalty({K, V}) ||  {K,V} <- Values, K == Key ]),
     {Key, Penalty}.
-        
+
 -define(NAMING_CONVENTION_MAX, 2).
 -define(ARITY_MAX, 5).
 -define(CLAUSES_MAX, 4).
@@ -85,7 +85,7 @@ get_options(Dir, CommandLineOpts) ->
 
 dir(Dir) ->
     dir(Dir, []).
-dir(Dir, Opts) ->    
+dir(Dir, Opts) ->
     IncDirs = find_hrl_dirs(Dir, Opts),
     add_parse_transform_dir(Opts),
     IncDirOpt = make_inc_compiler_opt(IncDirs),
@@ -93,7 +93,7 @@ dir(Dir, Opts) ->
     reset_log(),
     log("options:~p~n"
         "incdirs:~p~n",[Opts, IncDirOpt]),
-    
+
     ForEachFileFun = fun(File) -> file(File, Opts, IncDirOpt) end,
     find_files(Dir, ForEachFileFun, Opts).
 
@@ -134,10 +134,10 @@ find_file_opts(LineOpts) ->
     adjust_all_relative_paths(Path, Opts).
 
 adjust_all_relative_paths(Path, Opts) ->
-    Keys = [include_paths, parse_transform_beam_dirs], 
+    Keys = [include_paths, parse_transform_beam_dirs],
     Present = [ K || K <- Keys, gv(K, Opts) =/= undefined ],
     adjust_relative_paths(Path, Present, Opts).
-                                              
+
 adjust_relative_paths(RootPath, [K | Keys], Opts) ->
     RelPaths = gv(K, Opts),
     P2 = adjust_relative_paths(RootPath, RelPaths),
@@ -147,9 +147,9 @@ adjust_relative_paths(_RootPath, [], Opts) ->
 
 adjust_relative_paths(RootPath, Paths) ->
     Fun = fun(P) ->
-                  case filename:pathtype(P) of 
+                  case filename:pathtype(P) of
                       relative -> filename:join(RootPath, P);
-                      _ -> P 
+                      _ -> P
                   end
           end,
     lists:map(Fun, Paths).
@@ -166,7 +166,7 @@ try_paths_in_order([undefined|T]) ->
 try_paths_in_order([P|T]) ->
     Path = filename:join(P,"ess.conf"),
     case file:consult(Path) of
-        {ok, Terms} ->            
+        {ok, Terms} ->
             {P, Terms};
         _ ->
             try_paths_in_order(T)
@@ -190,7 +190,7 @@ is_root_dir(Dir) ->
 dir_exists(Dir) ->
     filelib:is_dir(filename:join(Dir)).
 
-up_one(L) -> 
+up_one(L) ->
     %% remove last item
     rev(tl(rev(L))).
 
@@ -203,7 +203,7 @@ add_parse_transform_dir(Opts) ->
         _ ->
             ok
     end.
-        
+
 add_path(Path) ->
     code:add_patha(Path).
 
@@ -217,7 +217,7 @@ find_hrl_dirs(Dir, Opts) ->
             find_in_subdirs(".hrl", Paths, BlackList)
     end.
 
-find_dirs(Ext, Dir, BlackList) ->    
+find_dirs(Ext, Dir, BlackList) ->
     Fs = list_dir_full_names(Dir),
     HasFiles = any_file_has_extension(Ext, Fs),
     WhiteDirs = remove_blacklisted(BlackList, Fs),
@@ -265,7 +265,7 @@ find_files2(Dir, BlackList, ForEachFileFun) ->
     WhiteFs = remove_blacklisted(BlackList, Fs),
     SrcFiles = files_ending_in_erl(WhiteFs),
     SubDirs = find_in_subdirs_par(WhiteFs, BlackList, ForEachFileFun),
-    if (SrcFiles/=[]) andalso (SubDirs/=[]) -> 
+    if (SrcFiles/=[]) andalso (SubDirs/=[]) ->
             io:format("Warning, dir contains both source files and dirs: ~p~n",
                       [Dir]);
        true -> ok
@@ -295,13 +295,13 @@ run_fun_async(Fs, Fun) ->
 
 run_one_async(F, Fun) ->
     Me = self(),
-    {spawn(fun() -> 
+    {spawn(fun() ->
                    Res = (catch Fun(F)),
                    Me ! {self(), Res}
            end), F}.
 
 receive_answers(L) ->
-    [receive {Pid, Res} -> Res after 150000 -> {timeout, F} end 
+    [receive {Pid, Res} -> Res after 150000 -> {timeout, F} end
      || {Pid, F} <- L].
 
 is_erlang_source_file(F) ->
@@ -311,15 +311,15 @@ is_erlang_header_file(F) ->
     filename:extension(F) == ".hrl".
 
 get_all_files(Folder) ->
-    filelib:fold_files(Folder, ".*.erl$", true, 
-                       fun(File, AccIn) -> [File | AccIn] end, 
+    filelib:fold_files(Folder, ".*.erl$", true,
+                       fun(File, AccIn) -> [File | AccIn] end,
                        []).
 
 file(F, Opts, IncPaths) ->
     try
         CompileOpts = get_compile_options(),
         {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPaths),
-        {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} = 
+        {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} =
             beam_lib:chunks(Bin,[abstract_code]),
         RawValues = file_raw_values(Warnings, F, Opts),
         RawChildren = analyse_functions(AST, Opts),
@@ -329,7 +329,7 @@ file(F, Opts, IncPaths) ->
               raw_values = RawValues,
               children = RawChildren
              }
-    catch 
+    catch
         _:Err ->
             io:format("  f: ~s: error: ~p~n", [F, error_digest(Err)]),
             log("f: ~p ~p~n",[F, Err]),
@@ -348,7 +348,7 @@ reset_log() ->
 log(Fmt, Args) ->
     Message = io_lib:format(Fmt, Args),
     file:write_file("/tmp/ess_errors.log", Message, [append]).
-    
+
 get_all_values(K, Proplist) ->
     [ V || {Key,V} <- Proplist, Key == K ].
 
@@ -360,16 +360,16 @@ lexical_analyse(F, _Opts) ->
     lexical_analyse_string(binary_to_list(Bin)).
 
 lexical_analyse_string(Str) ->
-    L = strip_lines(divide_into_lines(Str)),    
-    handle_comment_percent(count_comment_and_code_lines(L)).    
+    L = strip_lines(divide_into_lines(Str)),
+    handle_comment_percent(count_comment_and_code_lines(L)).
 
 count_comment_and_code_lines(L) ->
     Tot = length(L),
     LineLengths = line_lengths(L),
     {Code, Comment, Blank} = count_comment_and_code_lines2(L, 0, 0, 0),
     [{total_lines, Tot},
-     {lines_of_code, Code}, 
-     {lines_of_comments, Comment}, 
+     {lines_of_code, Code},
+     {lines_of_comments, Comment},
      {line_lengths, LineLengths},
      {blank_lines, Blank}].
 
@@ -379,10 +379,10 @@ count_comment_and_code_lines2([[] | Ls], Code, Comment, Blank) ->
     count_comment_and_code_lines2(Ls, Code, Comment, Blank+1);
 count_comment_and_code_lines2([L | Ls], Code, Comment, Blank) ->
     case is_comment_line(L) of
-	true ->
-	    count_comment_and_code_lines2(Ls, Code, Comment+1, Blank);
-	_ ->
-	    count_comment_and_code_lines2(Ls, Code+1, Comment, Blank)
+        true ->
+            count_comment_and_code_lines2(Ls, Code, Comment+1, Blank);
+        _ ->
+            count_comment_and_code_lines2(Ls, Code+1, Comment, Blank)
     end.
 
 is_comment_line("%"++_) -> true;
@@ -419,7 +419,7 @@ remove_ws(L) ->
 file_raw_values(Warnings, F, Opts) ->
     [ warning_metric(Warnings) | lexical_analyse(F, Opts)].
 
-analyse_functions(AST, _Opts) ->     
+analyse_functions(AST, _Opts) ->
     [ analyze_function(F) || F <- AST, is_ast_function(F) ].
 
 aggregate_trees(Trees) ->
@@ -441,10 +441,10 @@ aggregate(Values) ->
     group_on_tag(Values).
 
 group_on_tag(Fs) ->
-    try 
+    try
         Keys = proplists:get_keys(hd(Fs)),
         All_results = lists:flatten(Fs),
-        aggregate2([ {Key, proplists:get_all_values(Key,All_results)} || 
+        aggregate2([ {Key, proplists:get_all_values(Key,All_results)} ||
                        Key <- Keys ])
     catch
         _:_ ->
@@ -485,7 +485,7 @@ item_count(#val{n=N}) -> N;
 item_count(X) when is_integer(X) -> 1.
 
 
-analyze_function(AST={function, _, _Name, _, _}) ->    
+analyze_function(AST={function, _, _Name, _, _}) ->
     #tree{type = function,
           name = make_name(AST),
           raw_values = [{naming_convention, naming_convention(AST, false)},
@@ -523,15 +523,15 @@ naming_convention({'if',_, Clauses}, FromMatch) ->
 naming_convention({'receive',_,Clauses}, FromMatch) ->
     naming_convention(Clauses, FromMatch);
 naming_convention({'receive',_,Clauses, _, AfterExprs}, FromMatch) ->
-    sum(naming_convention(Clauses, FromMatch), 
+    sum(naming_convention(Clauses, FromMatch),
         naming_convention(AfterExprs, FromMatch));
 naming_convention({cons,_,Hd, Tl}, FromMatch) ->
-    sum(naming_convention(Hd, FromMatch) , 
+    sum(naming_convention(Hd, FromMatch) ,
         naming_convention(Tl, FromMatch));
 naming_convention({record,_,_,Fields}, FromMatch) ->
     naming_convention(Fields, FromMatch);
 naming_convention({record,_,Var,_,RecordField}, FromMatch) ->
-    sum(naming_convention(Var, FromMatch), 
+    sum(naming_convention(Var, FromMatch),
         naming_convention(RecordField, FromMatch));
 naming_convention({record_field,_,_,Expr}, FromMatch) ->
     naming_convention(Expr, FromMatch);
@@ -543,18 +543,18 @@ naming_convention({record_index,_,_, Expr}, FromMatch) ->
 naming_convention({tuple,_,Elements}, FromMatch) ->
     naming_convention(Elements, FromMatch);
 naming_convention({op,_,_,LHS,RHS}, FromMatch) ->
-    sum(naming_convention(LHS, FromMatch), 
+    sum(naming_convention(LHS, FromMatch),
         naming_convention(RHS, FromMatch));
 naming_convention({op,_,_,Expr}, FromMatch) ->
     naming_convention(Expr, FromMatch);
 naming_convention({lc,_,Body,Generator}, FromMatch) ->
-    sum(naming_convention(Body, FromMatch), 
+    sum(naming_convention(Body, FromMatch),
         naming_convention(Generator, FromMatch));
 naming_convention({generate,_,Expr,Guards}, FromMatch) ->
-    sum(naming_convention(Expr, FromMatch), 
+    sum(naming_convention(Expr, FromMatch),
         naming_convention(Guards, FromMatch));
 naming_convention({b_generate,_,Expr,Guards}, FromMatch) ->
-    sum(naming_convention(Expr, FromMatch), 
+    sum(naming_convention(Expr, FromMatch),
         naming_convention(Guards, FromMatch));
 naming_convention({'catch',_,CallExpr}, FromMatch) ->
     naming_convention(CallExpr, FromMatch);
@@ -563,12 +563,12 @@ naming_convention({'fun',_,Expr}, FromMatch) ->
 naming_convention({clauses,Clauses}, FromMatch) ->
     naming_convention(Clauses, FromMatch);
 naming_convention({'try',_,CallExprs,_,Exprs,_}, FromMatch)->
-    sum(naming_convention(CallExprs, FromMatch), 
+    sum(naming_convention(CallExprs, FromMatch),
         naming_convention(Exprs, FromMatch));
 naming_convention({block, _, CallExprs}, FromMatch) ->
     naming_convention(CallExprs, FromMatch);
 naming_convention({bc,_,Body,Generator}, FromMatch) ->
-    sum(naming_convention(Body, FromMatch), 
+    sum(naming_convention(Body, FromMatch),
         naming_convention(Generator, FromMatch));
 
 naming_convention({var,_,V}, true) -> camel_case(V);
@@ -581,7 +581,7 @@ naming_convention({var,_,V}, _) -> 0;
 naming_convention({string,_,_}, _) -> 0;
 naming_convention({integer,_,_}, _) -> 0;
 naming_convention({float,_,_}, _) -> 0;
-naming_convention({char,_,_}, _) -> 0. 
+naming_convention({char,_,_}, _) -> 0.
 
 
 snake_case(Input) ->
@@ -590,7 +590,7 @@ snake_case(Input) ->
         _ -> 1
     end.
 
-is_snake_cased(String) -> 
+is_snake_cased(String) ->
     OnlyLowerCase = string:to_lower(String) == String,
     HasUnderscore = lists:member($_, String),
     IMN = is_module_name(String),
@@ -608,16 +608,16 @@ index_of_first_uppercase(Ix, [C|Cs]) when C =< $Z, C >= $A ->
     Ix;
 index_of_first_uppercase(Ix, [_|Cs]) ->
     index_of_first_uppercase(Ix+1, Cs).
-    
+
 camel_case(Input) ->
     case is_camel_cased(to_string(Input)) of
         true -> 0;
         _ ->  1
     end.
 
-is_camel_cased([$_|_]) -> 
+is_camel_cased([$_|_]) ->
     true;
-is_camel_cased(String) when length(String) > 3 -> 
+is_camel_cased(String) when length(String) > 3 ->
     HasUpperCase = string:to_lower(String) /= String,
     HasLowerCase = string:to_upper(String) /= String,
     HasUnderscore = lists:member($_, String),
@@ -634,11 +634,11 @@ make_name({function, _, Name, Arity, _}) ->
 warning_metric(Warnings) ->
     {warnings, length(Warnings)}.
 
-expressions_per_function_line({function,_,_,_,Clauses}) -> 
+expressions_per_function_line({function,_,_,_,Clauses}) ->
     LNs = [ get_toplevel_linenumbers(C) || C <- Clauses],
     ROSL = repeats_on_same_line(lists:flatten(LNs)),
-    calc_avg(#val{max=lists:max(ROSL), 
-                  min=lists:min(ROSL), 
+    calc_avg(#val{max=lists:max(ROSL),
+                  min=lists:min(ROSL),
                   sum=sum(ROSL),
                   n=length(ROSL)}).
 
@@ -733,7 +733,7 @@ is_variable_stepping(V1, V2) ->
 is_all_integers(L) ->
     lists:all(fun is_ascii_integer/1, L).
 
-is_ascii_integer(X) when (X>=$0), (X=<$9) -> true; 
+is_ascii_integer(X) when (X>=$0), (X=<$9) -> true;
 is_ascii_integer(_) -> false.
 
 
@@ -823,7 +823,7 @@ get_toplevel_linenumbers({clause,_Line,_,_,Expressions}) ->
     [element(2,L) || L <- Expressions].
 
 
-get_linenumbers({function,_Line,_,_,Clauses}) ->    
+get_linenumbers({function,_Line,_,_,Clauses}) ->
     [ get_linenumbers(C) || C <- Clauses ];
 get_linenumbers({clause,_Line,_,_,Expressions}) ->
     get_linenumbers_body(Expressions).
@@ -873,12 +873,12 @@ get_linenumbers_body([{Marker,LN,_,_,_}|T]) when is_atom(Marker) ->
 sort(L) -> lists:sort(L).
 
 usort(L) -> lists:usort(L).
-    
+
 sum(A, B) -> A+B.
 sum(L) -> lists:sum(L).
 
 max([]) -> 0;
-max(L) -> lists:max(L).    
+max(L) -> lists:max(L).
 
 rev(L) -> lists:reverse(L).
 
