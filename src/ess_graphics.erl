@@ -68,7 +68,7 @@ save_csv_file(T, Opts) ->
 format_tree(_Pad, #tree{type=function}) ->
     [];
 format_tree(Pad, T=#tree{quality=Q, children=Ch}) ->
-    [io_lib:format("~s~s, ~p~n", [Pad, tree_name(T), Q]), 
+    [io_lib:format("~s~s, ~p~n", [Pad, tree_name(T), Q]),
      format_tree(Pad++"    ", Ch)];
 format_tree(Pad, L) when is_list(L) ->
     [format_tree(Pad, C) || C <- L].
@@ -105,7 +105,7 @@ mark_collapsed_nodes(T=#tree{children=Ch}) ->
 
 set_collapsed(L) ->
     [T#tree{collapsed=true} || T <- L].
-    
+
 
 mark_first_render(L) when is_list(L) ->
     [mark_first_render(T) || T <- L];
@@ -216,7 +216,7 @@ generate_html_page(NDS, EDS, HIDDEN_NDS, Opts) ->
 
   function add_node_with_id(Id) {
         all_nodes.forEach(function(n) {
-                        if(n.id == Id) { 
+                        if(n.id == Id) {
                            nodes.add(n);
                         }
                       },this);
@@ -228,7 +228,7 @@ generate_html_page(NDS, EDS, HIDDEN_NDS, Opts) ->
 
   function remove_node_with_id(Id) {
        nodes.forEach(function(n) {
-                       if(n.id == Id) { 
+                       if(n.id == Id) {
                           nodes.remove(n);
                        }
                      },this);
@@ -257,11 +257,11 @@ prune_nodes_with_single_children(T=#tree{children=Ch}) ->
 prune_nodes_with_single_children(L) when is_list(L) ->
     [prune_nodes_with_single_children(T) || T <- L].
 
-    
+
 prune_tree_on_quality(T) ->
     prune_tree_on_quality(T, 100).
-        
-prune_tree_on_quality(T = #tree{children = Ch}, Level) -> 
+
+prune_tree_on_quality(T = #tree{children = Ch}, Level) ->
     Ch2 = [ C || C <- Ch, C#tree.quality < Level ],
     Ch3 = [ prune_tree_on_quality(C, Level) || C <- Ch2 ],
     T#tree{children = Ch3}.
@@ -318,15 +318,15 @@ generate_edges_data_set2(#tree{id=Id, children=Ch}) ->
     ChEdges = [ generate_edges_data_set2(C) || C <- Ch],
     Edges ++ ChEdges.
 
-generate_one_node(#tree{id=Id, name=Name, quality=Q, 
+generate_one_node(#tree{id=Id, name=Name, quality=Q,
                         children=Ch, render=Render, collapsed=Collapsed,
                         quality_penalty=QP
                        }) ->
     Color = quality_to_color(Q),
-    #node{id=Id, 
+    #node{id=Id,
           name=replace_pipe_with_slash(filename:basename(Name)),
-          quality=Q, 
-          color=Color, 
+          quality=Q,
+          color=Color,
           children_ids=[C#tree.id||C<-Ch],
           render=Render,
           collapsed=Collapsed,
@@ -341,7 +341,7 @@ replace_pipe_with_slash([C|T]) ->
     [C|replace_pipe_with_slash(T)].
 
 generate_one_edge(Id, ChId) ->
-    #edge{id=Id, 
+    #edge{id=Id,
           to=ChId}.
 
 quality_to_color(N) ->
@@ -377,13 +377,13 @@ quality_penalty_to_title(QP) ->
     string:join([ lists:flatten(io_lib:format("~p: ~p",[K,V])) || {K,V}<-QP],"</br> ").
 
 to_edge_string(L) ->
-    S = [nice_str("{from: ~p, to: ~p, color:'black'}", 
-                  [E#edge.id, 
+    S = [nice_str("{from: ~p, to: ~p, color:'black'}",
+                  [E#edge.id,
                    E#edge.to
                   ]) || E <- L],
     string:join(S, ",").
-    
-rgba({R,G,B}) ->    
+
+rgba({R,G,B}) ->
     nice_str("rgba(~p,~p,~p,1)", [R, G, B]).
 
 nice_str(F,A) ->
@@ -418,13 +418,13 @@ seq(A1, A2, [F|L]) ->
             {arity, 2} -> F(A1, A2)
         end,
     seq(A, A2, L);
-seq(Data, _, []) -> 
+seq(Data, _, []) ->
     Data.
 
 %% seq(Data, L) ->
 %%     seq_w_timing(1, Data, L).
 
-%% seq_w_timing(N, Data, [F|L]) -> 
+%% seq_w_timing(N, Data, [F|L]) ->
 %%     T1 = erlang:monotonic_time(),
 %%     NewData = F(Data),
 %%     TDiff = erlang:monotonic_time()-T1,
