@@ -1,87 +1,30 @@
 -module(ess_graphics).
 -include("ess.hrl").
--compile(export_all).
 
--record(node,{id, name, quality, color, children_ids, collapsed=false, render=false,
-              quality_penalty}).
+-export([generate/2]).
+
+-record(node,{id, name, quality, color, children_ids, 
+              collapsed=false, render=false, quality_penalty}).
+
 -record(edge,{id, to}).
 
-%% before opt
-%%
-%% evaluating took: 113100ms
-%%
-%%
-%% after parallell opt
-%%
-%% evaluating took: 41090ms
-%%
-%% after more parallell opt
-%%
-%% evaluating took: 32052ms
-%%
 
-analyse(Path) ->
-    analyse(Path, []).
-analyse(Path, CommandLineOpts) ->
-    T1 = erlang:monotonic_time(),
-    Opts = ess:get_options(Path, CommandLineOpts),
-    seq(Path, Opts,
-        [ fun init_timing/1,
-          fun ess:dir/2,
-          fun ess:quality/2,
-          fun set_top_level_name/1,
-          fun save_csv_file/2,
-          fun prune_nodes_with_single_children/1,
+generate(Tree, Opts) ->
+    seq(Tree, Opts,
+        [ fun prune_nodes_with_single_children/1,
           fun prune_tree_on_quality/1,
           fun set_tree_ids/1,
           fun mark_collapsed_nodes/1,
           fun mark_first_render/1,
-          fun generate_html_page/2,
-          fun print_timing/1
-        ]).
-
-init_timing(Tree) ->
-    put(start_time, erlang:monotonic_time()),
-    Tree.
-
-print_timing(Tree) ->
-    T1 = get(start_time),
-    TDiff = erlang:monotonic_time()-T1,
-    UnitPerS = erlang:convert_time_unit(1, seconds, native),
-    TDiffMs = round(1000 * TDiff / UnitPerS),
-    io:format("evaluating took: ~pms~n", [TDiffMs]),
-    Tree.
-
-set_top_level_name(T=#tree{name=Name}) ->
-    case rev(filename:split(Name)) of
-        ["src", "sgc" | _ ] -> T#tree{name="SBG"};
-        ["src", "is-sbg" | _] -> T#tree{name="SBG"};
-        _ -> T
-    end.
-
-save_csv_file(T, Opts) ->
-    L = format_tree("", T),
-    File = filename:join(gv(out_dir, Opts),"res.csv"),
-    file:write_file(File, list_to_binary(L)),
-    T.
-
-format_tree(_Pad, #tree{type=function}) ->
-    [];
-format_tree(Pad, T=#tree{quality=Q, children=Ch}) ->
-    [io_lib:format("~s~s, ~p~n", [Pad, tree_name(T), Q]),
-     format_tree(Pad++"    ", Ch)];
-format_tree(Pad, L) when is_list(L) ->
-    [format_tree(Pad, C) || C <- L].
-
-tree_name(#tree{type=file, name=Name}) -> filename:basename(Name);
-tree_name(#tree{name=Name}) -> Name.
+          fun generate_html_page/2 ]).
 
 generate_html_page(Tree, Opts) ->
     RawNDS = generate_node_data_set(Tree),
     RawEDS = generate_edges_data_set(Tree),
     {VisibleNDS, HiddenNDS} = split_visible(RawNDS),
     io:format("# nodes: ~p~n", [new_unique_id()]),
-    io:format("~s quality: ~p~n", [Tree#tree.name, Tree#tree.quality]),
+    io:format("~s quality: ~p~n",
+              [Tree#tree.name, Tree#tree.quality]),
     VNDS = to_node_string(VisibleNDS),
     HNDS = to_node_string(HiddenNDS),
     VEDS = to_edge_string(RawEDS),
@@ -90,11 +33,6 @@ generate_html_page(Tree, Opts) ->
 split_visible(NDS) ->
     lists:partition(fun(N) -> N#node.render end, NDS).
 
-
-t() ->
-    RootDir = "/local/scratch/etxpell/proj/sgc/src/",
-    adjust_paths(),
-    analyse(RootDir).
 
 mark_collapsed_nodes(L) when is_list(L) ->
     [mark_collapsed_nodes(T) || T <- L];
@@ -403,15 +341,6 @@ new_unique_id() ->
     put(unique_id, New),
     New.
 
-adjust_paths() ->
-    add_path("/local/scratch/etxpell/proj/sgc/sgc/ecop/out/").
-
-add_path(Path) ->
-    code:add_pathz(Path).
-
-i2l(X) when is_list(X) -> X;
-i2l(X) when is_integer(X) -> integer_to_list(X).
-
 seq(A1, A2, [F|L]) ->
     A = case erlang:fun_info(F, arity) of
             {arity, 1} -> F(A1);
@@ -421,23 +350,5 @@ seq(A1, A2, [F|L]) ->
 seq(Data, _, []) ->
     Data.
 
-%% seq(Data, L) ->
-%%     seq_w_timing(1, Data, L).
-
-%% seq_w_timing(N, Data, [F|L]) ->
-%%     T1 = erlang:monotonic_time(),
-%%     NewData = F(Data),
-%%     TDiff = erlang:monotonic_time()-T1,
-%%     UnitPerS = erlang:convert_time_unit(1, seconds, native),
-%%     TDiffMs = round(1000 * TDiff / UnitPerS),
-%%     io:format("seq ~p: ~pms~n", [N, TDiffMs]),
-%%     seq_w_timing(N+1, NewData, L);
-%% seq_w_timing(_, Data, []) -> Data.
-
-
-rev(L) -> lists:reverse(L).
-
 gv(Key, L) ->
     proplists:get_value(Key, L).
-gv(Key, L, Def) ->
-    proplists:get_value(Key, L, Def).
