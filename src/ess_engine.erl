@@ -43,6 +43,7 @@ penalty_for(Key, Values) ->
     Penalty = lists:sum([ penalty({K, V}) ||  {K,V} <- Values, K == Key ]),
     {Key, Penalty}.
 
+-define(EXPORT_ALL_MAX, 0).
 -define(SPACE_AFTER_COMMA_MAX, 1).
 -define(NAMING_CONVENTION_MAX, 2).
 -define(ARITY_MAX, 5).
@@ -54,6 +55,9 @@ penalty_for(Key, Values) ->
 -define(LINE_LENGTHS_MAX, 60).
 
 penalty({_, undefined}) -> 0;
+
+penalty({export_all, V}) when V =< ?EXPORT_ALL_MAX -> 0;
+penalty({export_all, V}) -> bounded_max(V, ?EXPORT_ALL_MAX);
 
 penalty({space_after_comma, V}) when V =< ?SPACE_AFTER_COMMA_MAX -> 0;
 penalty({space_after_comma, V}) -> bounded_max(V, ?SPACE_AFTER_COMMA_MAX);
@@ -223,7 +227,7 @@ file(F, Opts, IncPaths) ->
         {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPaths),
         {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} =
             beam_lib:chunks(Bin,[abstract_code]),
-        RawValues = file_raw_values(Warnings, F, Opts),
+        RawValues = file_raw_values(AST, Warnings, F, Opts),        
         RawChildren = analyse_functions(AST, Opts),
         io:format("  f: ~s: ok~n", [F]),
         #tree{type = file,
@@ -332,8 +336,18 @@ dil([C|R],Current,Acc) ->
 strip_lines(Ls) ->
     [string:strip(L) || L <- Ls ].
 
-file_raw_values(Warnings, F, Opts) ->
-    [ warning_metric(Warnings) | lexical_analyse(F, Opts)].
+file_raw_values(AST, Warnings, F, Opts) ->
+    EA = export_all_metric(AST),
+    WM = warning_metric(Warnings),
+    LA = lexical_analyse(F, Opts),
+    [ EA, WM | LA ].
+
+export_all_metric([]) ->
+    {export_all, 0};
+export_all_metric([{attribute, _, compile, export_all}|_]) ->
+    {export_all, 1};
+export_all_metric([_|T]) ->
+    export_all_metric(T).
 
 analyse_functions(AST, _Opts) ->
     [ analyze_function(F) || F <- AST, is_ast_function(F) ].
