@@ -1,6 +1,9 @@
--module(ess).
+-module(ess_engine).
 -include("ess.hrl").
--compile(export_all).
+
+-export([dir/1,
+         dir/2,
+         quality/2]).
 
 quality(T = #tree{type=function}, Opts) ->
     RV = T#tree.raw_values,
@@ -80,9 +83,6 @@ bounded_max(V1, Target) ->
     round( 100 / math:pow(2, (Target/(V*0.25))) ).
 
 
-get_options(Dir, CommandLineOpts) ->
-    find_all_opts([{target_dir, Dir} | CommandLineOpts]).
-
 dir(Dir) ->
     dir(Dir, []).
 dir(Dir, Opts) ->
@@ -99,100 +99,6 @@ dir(Dir, Opts) ->
 
 make_inc_compiler_opt(L) ->
     [{i,IC} || IC <- L ].
-
-find_all_opts(LineOpts) ->
-    FileOpts = find_file_opts(LineOpts),
-    DefaultOptions = get_default_options(),
-    lists:ukeysort(1, LineOpts ++ FileOpts ++ DefaultOptions).
-
-get_default_options() ->
-    [{metrics, [naming_convention,
-                arity,
-                clauses,
-                variable_steppings,
-                expressions_per_function,
-                warnings,
-                complexity,
-                line_lengths]},
-     {include_paths, []},
-     {conf_dir, ""},
-     {exclude_dir_patterns, [".git"]},
-     {exclude_dir_patterns_during_hrl_search, []},
-     {exclude_dir_patterns_during_analysis, []},
-     {parse_transform_beam_dirs, []},
-     {out_dir, "./"}].
-
-find_file_opts(LineOpts) ->
-    HomeDir = get_home_dir(),
-    LineOptionDir = gv(conf_dir, LineOpts),
-    TargetDir = gv(target_dir, LineOpts),
-    {Path, Opts} = try_paths_in_order([LineOptionDir,
-                                       TargetDir,
-                                       ".",
-                                       HomeDir]),
-    io:format("config file ~p~n", [Path]),
-    adjust_all_relative_paths(Path, Opts).
-
-adjust_all_relative_paths(Path, Opts) ->
-    Keys = [include_paths, parse_transform_beam_dirs],
-    Present = [ K || K <- Keys, gv(K, Opts) =/= undefined ],
-    adjust_relative_paths(Path, Present, Opts).
-
-adjust_relative_paths(RootPath, [K | Keys], Opts) ->
-    RelPaths = gv(K, Opts),
-    P2 = adjust_relative_paths(RootPath, RelPaths),
-    [{K, P2} | adjust_relative_paths(RootPath, Keys, Opts)];
-adjust_relative_paths(_RootPath, [], Opts) ->
-    Opts.
-
-adjust_relative_paths(RootPath, Paths) ->
-    Fun = fun(P) ->
-                  case filename:pathtype(P) of
-                      relative -> filename:join(RootPath, P);
-                      _ -> P
-                  end
-          end,
-    lists:map(Fun, Paths).
-
-
-get_home_dir() ->
-    User = os:getenv("USER"),
-    filename:join(["/home",User]).
-
-try_paths_in_order([]) ->
-    [];
-try_paths_in_order([undefined|T]) ->
-    try_paths_in_order(T);
-try_paths_in_order([P|T]) ->
-    Path = filename:join(P,"ess.conf"),
-    case file:consult(Path) of
-        {ok, Terms} ->
-            {P, Terms};
-        _ ->
-            try_paths_in_order(T)
-    end.
-
-find_root_dir(Dir) ->
-    try find_root_dir2(filename:split(Dir))
-    catch _:_ -> Dir
-    end.
-
-find_root_dir2(Dir) ->
-    case is_root_dir(Dir) of
-        true -> filename:join(Dir);
-        _ -> find_root_dir2(up_one(Dir))
-    end.
-
-is_root_dir(Dir) ->
-    dir_exists(Dir++[src,sgc,reg,src]) andalso
-        dir_exists(Dir++[src,syf,sip,src]).
-
-dir_exists(Dir) ->
-    filelib:is_dir(filename:join(Dir)).
-
-up_one(L) ->
-    %% remove last item
-    rev(tl(rev(L))).
 
 add_parse_transform_dir(Opts) ->
     case gv(parse_transform_beam_dirs, Opts) of
@@ -238,6 +144,8 @@ remove_blacklisted(BlackList, Fs) ->
 is_blacklisted(BlackList, F) ->
     lists:any(fun(B) -> is_string_in_name(F, B) end, BlackList).
 
+is_erlang_source_file(F) ->
+    filename:extension(F) == ".erl".
 
 files_ending_in_erl(Fs) ->
     lists:filter(fun is_erlang_source_file/1, Fs).
@@ -304,16 +212,6 @@ receive_answers(L) ->
     [receive {Pid, Res} -> Res after 150000 -> {timeout, F} end
      || {Pid, F} <- L].
 
-is_erlang_source_file(F) ->
-    filename:extension(F) == ".erl".
-
-is_erlang_header_file(F) ->
-    filename:extension(F) == ".hrl".
-
-get_all_files(Folder) ->
-    filelib:fold_files(Folder, ".*.erl$", true,
-                       fun(File, AccIn) -> [File | AccIn] end,
-                       []).
 
 file(F, Opts, IncPaths) ->
     try
@@ -422,9 +320,6 @@ file_raw_values(Warnings, F, Opts) ->
 analyse_functions(AST, _Opts) ->
     [ analyze_function(F) || F <- AST, is_ast_function(F) ].
 
-aggregate_trees(Trees) ->
-    handle_comment_percent(aggregate(extract_raw_values(Trees))).
-
 handle_comment_percent(L) ->
     Percent = calculate_comment_to_line_percent(L),
     replace_tag(comment_to_line_percent, Percent, L).
@@ -434,56 +329,8 @@ calculate_comment_to_line_percent(L) ->
     Comments = value_sum(gv(lines_of_comments,L)),
     round(100*(Comments/Lines)).
 
-extract_raw_values(Trees) ->
-    [ T#tree.raw_values || T <- Trees ].
-
-aggregate(Values) ->
-    group_on_tag(Values).
-
-group_on_tag(Fs) ->
-    try
-        Keys = proplists:get_keys(hd(Fs)),
-        All_results = lists:flatten(Fs),
-        aggregate2([ {Key, proplists:get_all_values(Key,All_results)} ||
-                       Key <- Keys ])
-    catch
-        _:_ ->
-            io:format("FS:::~p~n",[Fs]),
-            []
-    end.
-
-aggregate2(L) ->
-    [ {Key,aggregate_values(Values)} || {Key,Values} <- L].
-
-aggregate_values(L) ->
-    Max = lists:max(get_max_values(L)),
-    Min = lists:min(get_min_values(L)),
-    Sum = sum(get_sum_values(L)),
-    N = count_number_of_items(L),
-    calc_avg(#val{max=Max, min=Min, sum=Sum, n=N}).
-
-get_max_values(L) -> [value_max(X) || X <- L].
-get_min_values(L) -> [value_min(X) || X <- L].
-get_sum_values(L) -> [value_sum(X) || X <- L].
-
-value_max(#val{max=M}) -> M;
-value_max(M) when is_integer(M) -> M.
-
-value_min(#val{min=M}) -> M;
-value_min(M) when is_integer(M) -> M.
-
 value_sum(#val{sum=Sum}) -> Sum;
 value_sum(X) when is_integer(X) -> X.
-
-value_avg(#val{avg=Avg}) -> Avg;
-value_avg(X) when is_integer(X) -> X.
-
-count_number_of_items(L) ->
-    sum([ item_count(X) || X <- L ]).
-
-item_count(#val{n=N}) -> N;
-item_count(X) when is_integer(X) -> 1.
-
 
 analyze_function(AST={function, _, _Name, _, _}) ->
     #tree{type = function,
@@ -506,7 +353,7 @@ naming_convention({clause, _, Match, Guards, Exprs}, FromMatch) ->
     sum([naming_convention(Match, FromMatch),
          naming_convention(Guards, FromMatch),
          naming_convention(Exprs, FromMatch)]);
-naming_convention({match,_,LHS, RHS}, FromMatch) ->
+naming_convention({match,_,LHS, _RHS}, FromMatch) ->
     sum(naming_convention(LHS, true),
         naming_convention(LHS, FromMatch));
 naming_convention({call,_, _, Args}, FromMatch) ->
@@ -572,12 +419,12 @@ naming_convention({bc,_,Body,Generator}, FromMatch) ->
         naming_convention(Generator, FromMatch));
 
 naming_convention({var,_,V}, true) -> camel_case(V);
-naming_convention({atom,N,A}, _) -> snake_case(A);
+naming_convention({atom,_,A}, _) -> snake_case(A);
 
 naming_convention({function,_,_}, _) -> 0;
 naming_convention({function,_,_,_}, _) -> 0;
 naming_convention({nil,_}, _) -> 0;
-naming_convention({var,_,V}, _) -> 0;
+naming_convention({var,_,_}, _) -> 0;
 naming_convention({string,_,_}, _) -> 0;
 naming_convention({integer,_,_}, _) -> 0;
 naming_convention({float,_,_}, _) -> 0;
@@ -604,7 +451,7 @@ index_of_first_uppercase(S) ->
 
 index_of_first_uppercase(_, []) ->
     0;
-index_of_first_uppercase(Ix, [C|Cs]) when C =< $Z, C >= $A ->
+index_of_first_uppercase(Ix, [C|_]) when C =< $Z, C >= $A ->
     Ix;
 index_of_first_uppercase(Ix, [_|Cs]) ->
     index_of_first_uppercase(Ix+1, Cs).
@@ -869,8 +716,6 @@ get_linenumbers_body([{Marker,LN,_,_,_}|T]) when is_atom(Marker) ->
 
 %%-----------------------
 %% Utilities
-
-sort(L) -> lists:sort(L).
 
 usort(L) -> lists:usort(L).
 
