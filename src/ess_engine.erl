@@ -36,60 +36,25 @@ key_sum(Proplist) ->
     [ {K, lists:sum(get_all_values(K,Proplist))} || K <- Keys ].
 
 calculate_quality_penalty(RawValues, Opts) ->
-    Keys = gv(metrics, Opts),
-    [ penalty_for(K, RawValues) || K <- Keys ].
+    Metrics = gv(metrics, Opts),
+    [ penalty_for(M, RawValues) || M <- Metrics ].
 
-penalty_for(Key, Values) ->
-    Penalty = lists:sum([ penalty({K, V}) ||  {K,V} <- Values, K == Key ]),
+penalty_for({Key, Max}, Values) ->
+    Penalty = lists:sum([ penalty(K, V, Max) ||  {K,V} <- Values, K == Key ]),
     {Key, Penalty}.
 
--define(EXPORT_ALL_MAX, 0).
--define(SPACE_AFTER_COMMA_MAX, 1).
--define(NAMING_CONVENTION_MAX, 2).
--define(ARITY_MAX, 5).
--define(CLAUSES_MAX, 4).
--define(VARIABLE_STEPPING_MAX, 2).
--define(EXPRESSIONS_PER_FUNCTION_MAX, 20).
--define(WARNINGS_MAX, 0).
--define(COMPLEXITY_MAX, 3).
--define(LINE_LENGTHS_MAX, 60).
+penalty(_, undefined, _) -> 0;
 
-penalty({_, undefined}) -> 0;
 
-penalty({export_all, V}) when V =< ?EXPORT_ALL_MAX -> 0;
-penalty({export_all, V}) -> bounded_max(V, ?EXPORT_ALL_MAX);
+penalty(line_lengths, Val, Max) when Val#val.avg =< Max -> 0;
+penalty(line_lengths, Val, Max) -> bounded_max(Val#val.avg, Max);
 
-penalty({space_after_comma, V}) when V =< ?SPACE_AFTER_COMMA_MAX -> 0;
-penalty({space_after_comma, V}) -> bounded_max(V, ?SPACE_AFTER_COMMA_MAX);
-
-penalty({naming_convention, V}) when V =< ?NAMING_CONVENTION_MAX -> 0;
-penalty({naming_convention, V}) -> bounded_max(V, ?NAMING_CONVENTION_MAX);
-
-penalty({arity, V}) when V =< ?ARITY_MAX -> 0;
-penalty({arity, V}) -> bounded_max(V, ?ARITY_MAX);
-
-penalty({clauses,V}) when V =< ?CLAUSES_MAX -> 0;
-penalty({clauses,V}) -> bounded_max(V, ?CLAUSES_MAX);
-
-penalty({variable_steppings,V}) when V =< ?VARIABLE_STEPPING_MAX -> 0;
-penalty({variable_steppings,V}) -> bounded_max(V, ?VARIABLE_STEPPING_MAX);
-
-penalty({expressions_per_function,V}) when V =< ?EXPRESSIONS_PER_FUNCTION_MAX -> 0;
-penalty({expressions_per_function,V}) -> bounded_max(V, ?EXPRESSIONS_PER_FUNCTION_MAX);
-
-penalty({warnings,V}) when V =< ?WARNINGS_MAX -> 0;
-penalty({warnings,V}) -> bounded_max(V, ?WARNINGS_MAX);
-
-penalty({complexity,V}) when V =< ?COMPLEXITY_MAX -> 0;
-penalty({complexity,V}) -> bounded_max(V, ?COMPLEXITY_MAX);
-
-penalty({line_lengths, Val}) when Val#val.avg =< ?LINE_LENGTHS_MAX -> 0;
-penalty({line_lengths, Val}) -> bounded_max(Val#val.avg, ?LINE_LENGTHS_MAX).
+penalty(_, V, Max) when V =< Max -> 0;
+penalty(_, V, Max) -> bounded_max(V, Max).
 
 bounded_max(V1, Target) ->
     V = V1 - Target,
     round( 100 / math:pow(2, (Target/(V*0.25))) ).
-
 
 dir(Dir) ->
     dir(Dir, []).
