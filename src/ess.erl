@@ -30,7 +30,8 @@ find_all_opts(LineOpts) ->
     lists:ukeysort(1, LineOpts ++ FileOpts ++ DefaultOptions).
 
 get_default_options() ->
-    [{metrics, [naming_convention,
+    [{metrics, [space_after_comma,
+                naming_convention,
                 arity,
                 clauses,
                 variable_steppings,

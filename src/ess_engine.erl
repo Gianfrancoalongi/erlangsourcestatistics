@@ -43,6 +43,7 @@ penalty_for(Key, Values) ->
     Penalty = lists:sum([ penalty({K, V}) ||  {K,V} <- Values, K == Key ]),
     {Key, Penalty}.
 
+-define(SPACE_AFTER_COMMA_MAX, 1).
 -define(NAMING_CONVENTION_MAX, 2).
 -define(ARITY_MAX, 5).
 -define(CLAUSES_MAX, 4).
@@ -53,6 +54,9 @@ penalty_for(Key, Values) ->
 -define(LINE_LENGTHS_MAX, 60).
 
 penalty({_, undefined}) -> 0;
+
+penalty({space_after_comma, V}) when V =< ?SPACE_AFTER_COMMA_MAX -> 0;
+penalty({space_after_comma, V}) -> bounded_max(V, ?SPACE_AFTER_COMMA_MAX);
 
 penalty({naming_convention, V}) when V =< ?NAMING_CONVENTION_MAX -> 0;
 penalty({naming_convention, V}) -> bounded_max(V, ?NAMING_CONVENTION_MAX);
@@ -230,7 +234,7 @@ file(F, Opts, IncPaths) ->
     catch
         _:Err ->
             io:format("  f: ~s: error: ~p~n", [F, error_digest(Err)]),
-            log("f: ~p ~p~n",[F, Err]),
+            log("f: ~p ~p ~p~n",[F, Err, erlang:get_stacktrace()]),
             undefined
     end.
 
@@ -258,18 +262,21 @@ lexical_analyse(F, _Opts) ->
     lexical_analyse_string(binary_to_list(Bin)).
 
 lexical_analyse_string(Str) ->
-    L = strip_lines(divide_into_lines(Str)),
-    handle_comment_percent(count_comment_and_code_lines(L)).
+    Lines = strip_lines(divide_into_lines(Str)),
+    seq_accum([], Lines,
+              [fun count_comment_and_code_lines/1,
+               fun analyse_space_after_comma/1]).
 
 count_comment_and_code_lines(L) ->
     Tot = length(L),
     LineLengths = line_lengths(L),
     {Code, Comment, Blank} = count_comment_and_code_lines2(L, 0, 0, 0),
-    [{total_lines, Tot},
-     {lines_of_code, Code},
-     {lines_of_comments, Comment},
-     {line_lengths, LineLengths},
-     {blank_lines, Blank}].
+    Values = [{total_lines, Tot},
+              {lines_of_code, Code},
+              {lines_of_comments, Comment},
+              {line_lengths, LineLengths},
+              {blank_lines, Blank}],
+    handle_comment_percent(Values).
 
 count_comment_and_code_lines2([], Code, Comment, Blank) ->
     {Code, Comment, Blank};
@@ -295,6 +302,21 @@ line_lengths(Ls) ->
     Mean = round(Sum / N),
     #val{max=Max, min=Min, avg=Mean, sum=Sum, n=N}.
 
+analyse_space_after_comma(Ls) ->
+    Faults = sum([ sac(L) || L <- Ls, not is_comment_line(L) ]),
+    [{space_after_comma, Faults}].
+
+sac([$,,$ | L]) ->
+    sac(L);
+sac([$,]) ->
+    0;
+sac([$,| L]) ->
+    1+sac(L);
+sac([_| L]) ->
+    sac(L);
+sac([]) ->
+    0.
+
 divide_into_lines(Str) ->
     dil(Str,[],[]).
 
@@ -307,12 +329,8 @@ dil([$\n|R],Current,Acc) ->
 dil([C|R],Current,Acc) ->
     dil(R,[C|Current],Acc).
 
-
 strip_lines(Ls) ->
-    [rev(remove_ws(rev(remove_ws(L)))) || L <- Ls ].
-
-remove_ws(L) ->
-    lists:dropwhile(fun(C) -> lists:member(C, [32,9]) end, L).
+    [string:strip(L) || L <- Ls ].
 
 file_raw_values(Warnings, F, Opts) ->
     [ warning_metric(Warnings) | lexical_analyse(F, Opts)].
@@ -735,3 +753,9 @@ gv(Key, L) ->
 gv(Key, L, Def) ->
     proplists:get_value(Key, L, Def).
 
+
+seq_accum(Acc, A, [F|L]) ->
+    Acc2 = F(A) ++ Acc,
+    seq_accum(Acc2, A, L);
+seq_accum(Acc, _, []) ->
+    Acc.
