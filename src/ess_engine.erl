@@ -50,22 +50,19 @@ calculate_quality_penalty(RawValues, Opts) ->
     Metrics = gv(metrics, Opts),
     [ penalty_for(M, RawValues) || M <- Metrics ].
 
-penalty_for({Key, Max}, Values) ->
-    Penalty = lists:sum([ penalty(K, V, Max) ||  {K,V} <- Values, K == Key ]),
+penalty_for({Key, {Min, Max}}, Values) ->
+    Penalty = lists:sum([ penalty(V, Min, Max) ||  {K,V} <- Values, K == Key ]),
     {Key, Penalty}.
 
-penalty(_, undefined, _) -> 0;
+penalty(undefined, _, _) -> 0;
+penalty(#val{avg=Avg}, Min, Max) ->
+    penalty(Avg, Min, Max);
 
-
-penalty(line_lengths, Val, Max) when Val#val.avg =< Max -> 0;
-penalty(line_lengths, Val, Max) -> bounded_max(Val#val.avg, Max);
-
-penalty(_, V, Max) when V =< Max -> 0;
-penalty(_, V, Max) -> bounded_max(V, Max).
-
-bounded_max(V1, Target) ->
-    V = V1 - Target,
-    round( 100 / math:pow(2, (Target/(V*0.25))) ).
+penalty(Val, Min, _) when Val < Min -> 0;
+penalty(Val, _, Max) when Val > Max -> 100;
+penalty(Val, Min, Max) ->
+    Penalty = ((Val - Min) / (Max - Min)) * 100,
+    round(Penalty).
 
 dir(Dir) ->
     dir(Dir, []).

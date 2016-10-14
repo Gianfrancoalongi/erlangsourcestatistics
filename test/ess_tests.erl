@@ -12,29 +12,36 @@ bad_function_name_test() ->
     Penalty = run_tc(function_naming, Code),
     ?assertEqual(100, Penalty).
 
+same_bad_function_name_is_counted_only_once_test() ->
+    Code = ["camelCased1() -> ok;",
+            "camelCased1() -> ok."],
+    Penalty = run_tc(function_naming, Code),
+    ?assertEqual(100, Penalty).
+
+bad_function_names_for_different_functions_test() ->
+    Code = ["camelCased1() -> ok.",
+            "camelCased2() -> ok."],
+    Penalty = run_tc(function_naming, Code),
+    ?assertEqual(200, Penalty).
+
 variables_shall_be_camel_cased_test() ->
     Code = ["f(CamelCase) -> CamelCase."],
     Penalty = run_tc(variable_naming, Code),
     ?assertEqual(0, Penalty).
 
-two_bad_variable_names_in_same_function_clause_is_ok_test() ->
+more_than_one_bad_variable_names_in_same_function_clause_is_bad_test() ->
     Code = ["f(S_1_b, S_2_b) -> "
             "   S_1_b + S_2_b."],
     Penalty = run_tc(variable_naming, Code),
-    ?assertEqual(0, Penalty).
+    ?assertEqual(25, Penalty).
 
-two_bad_variable_names_in_different_function_clause_is_ok_test() ->
+more_than_one_bad_variable_names_in_different_function_clauses_is_bad_test() ->
     Code = ["f(S_1_b) -> S_1_b;"
             "f(S_2_b) -> S_2_b."],
     Penalty = run_tc(variable_naming, Code),
-    ?assertEqual(0, Penalty).
-
-
-three_bad_variable_names_in_same_function_is_NOT_ok_test() ->
-    Code = ["f(S_1_1, S_2_2, S_3_3) -> "
-            "   ok."],
-    Penalty = run_tc(variable_naming, Code),
     ?assertEqual(25, Penalty).
+
+
 
 
 %% ---------------------------------------------------------------------------
