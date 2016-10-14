@@ -54,14 +54,15 @@ get_default_options() ->
      {out_dir, "./"}].
 
 default_metrics() ->
-    [{export_all, {0,0}},
-     {space_after_comma, {3, 10}},
-     {function_naming, {0, 1}},
+    [{function_naming, {0, 1}},
      {variable_naming, {1, 5}},
      {arity, {3, 8}},
      {clauses, {4, 10}},
-     {variable_steppings, {2, 5}},
      {expressions_per_function, {20, 50}},
+     {variable_steppings, {1, 5}},
+
+     {export_all, {0,1}},
+     {space_after_comma, {3, 10}},
      {warnings, {0, 1}},
      {complexity, {2, 6}},
      {line_lengths, {75, 120}}].

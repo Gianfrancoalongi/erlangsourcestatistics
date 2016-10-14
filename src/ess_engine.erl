@@ -9,8 +9,8 @@ quality(T = #tree{type=function}, Opts) ->
     RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV, Opts),
 
-    %% io:format("  RV-function:~p~n",[RV]),
-    %% io:format("QP-function:~p~n",[QP]),
+    io:format("  RV-function:~p~n",[RV]),
+    io:format("QP-function:~p~n",[QP]),
 
     T#tree{quality_penalty = QP,
            quality = 100 - lists:sum([V||{_,V}<-QP])
@@ -23,8 +23,8 @@ quality(T = #tree{type=file}, Opts) ->
     QP = calculate_quality_penalty(RV, Opts),
     QP2 = key_sum(QP ++ CQP),
 
-    %% io:format("  RV-file:~p~n",[RV]),
-    %% io:format("QP-file:~p~n",[QP2]),
+    io:format("  RV-file:~p~n",[RV]),
+    io:format("QP-file:~p~n",[QP2]),
 
     T#tree{children = CS2,
            quality_penalty = QP2,
@@ -50,6 +50,9 @@ calculate_quality_penalty(RawValues, Opts) ->
     Metrics = gv(metrics, Opts),
     [ penalty_for(M, RawValues) || M <- Metrics ].
 
+
+-define(MAX_PENALTY, 10).
+
 penalty_for({Key, {Min, Max}}, Values) ->
     Penalty = lists:sum([ penalty(V, Min, Max) ||  {K,V} <- Values, K == Key ]),
     {Key, Penalty}.
@@ -59,9 +62,9 @@ penalty(#val{avg=Avg}, Min, Max) ->
     penalty(Avg, Min, Max);
 
 penalty(Val, Min, _) when Val < Min -> 0;
-penalty(Val, _, Max) when Val > Max -> 100;
-penalty(Val, Min, Max) ->
-    Penalty = ((Val - Min) / (Max - Min)) * 100,
+penalty(Val, _, Max) when Val > Max -> ?MAX_PENALTY;
+penalty(Val, Min, Max)  ->
+    Penalty = ((Val - Min) / (Max - Min)) * ?MAX_PENALTY,
     round(Penalty).
 
 dir(Dir) ->
