@@ -4,7 +4,9 @@
 
 -export([analyse/1,
          analyse/2]).
-
+-export([get_options/2,
+         get_default_options/0
+        ]).
 
 analyse(Path) ->
     analyse(Path, []).
@@ -27,19 +29,22 @@ get_options(Dir, CommandLineOpts) ->
 find_all_opts(LineOpts) ->
     FileOpts = find_file_opts(LineOpts),
     DefaultOptions = get_default_options(),
-    lists:ukeysort(1, LineOpts ++ FileOpts ++ DefaultOptions).
+    Unique = lists:ukeysort(1, LineOpts ++ FileOpts ++ DefaultOptions),
+    set_metric_penalty(Unique).
+
+set_metric_penalty(Opts) ->
+    Ms = gv(metrics, Opts),
+    Defaults = default_metrics(),
+    WithPenalties = [ set_each_metric_penalty(M, Defaults) || M <- Ms ],
+    lists:keyreplace(metrics, 1, Opts, {metrics, WithPenalties}).
+
+set_each_metric_penalty(M, Defaults) when is_atom(M) ->
+    proplists:lookup(M, Defaults);
+set_each_metric_penalty(M, _Defaults) ->
+    M.
 
 get_default_options() ->
-    [{metrics, [{export_all, 0},
-                {space_after_comma, 1},
-                {naming_convention, 2},
-                {arity, 5},
-                {clauses, 4},
-                {variable_steppings, 2},
-                {expressions_per_function, 20},
-                {warnings, 0},
-                {complexity, 3},
-                {line_lengths, 75}]},
+    [{metrics, default_metrics()},
      {include_paths, []},
      {conf_dir, ""},
      {exclude_dir_patterns, [".git"]},
@@ -47,6 +52,22 @@ get_default_options() ->
      {exclude_dir_patterns_during_analysis, []},
      {parse_transform_beam_dirs, []},
      {out_dir, "./"}].
+
+default_metrics() ->
+    [{export_all, 0},
+     {space_after_comma, 1},
+     {function_naming, 0},
+     {variable_naming, 1},
+     {arity, 5},
+     {clauses, 4},
+     {variable_steppings, 2},
+     {expressions_per_function, 20},
+     {warnings, 0},
+     {complexity, 3},
+     {line_lengths, 75}].
+
+get_limit_for_metric(Metric) ->
+    gv(Metric, default_metrics()).
 
 find_file_opts(LineOpts) ->
     HomeDir = get_home_dir(),
