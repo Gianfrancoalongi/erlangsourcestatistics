@@ -8,6 +8,10 @@
 quality(T = #tree{type=function}, Opts) ->
     RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV, Opts),
+
+    io:format("  RV-function:~p~n",[RV]),
+    io:format("QP-function:~p~n",[QP]),
+
     T#tree{quality_penalty = QP,
            quality = 100 - lists:sum([V||{_,V}<-QP])
           };
@@ -18,6 +22,10 @@ quality(T = #tree{type=file}, Opts) ->
     RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV, Opts),
     QP2 = key_sum(QP ++ CQP),
+
+    io:format("  RV-file:~p~n",[RV]),
+    io:format("QP-file:~p~n",[QP2]),
+
     T#tree{children = CS2,
            quality_penalty = QP2,
            quality = 100 - lists:sum([V||{_,V}<-QP2])
@@ -26,6 +34,9 @@ quality(T = #tree{type=dir}, Opts) ->
     CS = T#tree.children,
     CS2 = [ quality(C, Opts) || C <- CS],
     CQP = lists:flatten([ C#tree.quality_penalty || C <- CS2 ]),
+
+%%    io:format("QP-dir:~p~n",[CQP]),
+
     T#tree{children = CS2,
            quality_penalty = key_sum(CQP),
            quality = 100 - lists:sum([V||{_,V}<-CQP])
@@ -39,22 +50,22 @@ calculate_quality_penalty(RawValues, Opts) ->
     Metrics = gv(metrics, Opts),
     [ penalty_for(M, RawValues) || M <- Metrics ].
 
-penalty_for({Key, Max}, Values) ->
-    Penalty = lists:sum([ penalty(K, V, Max) ||  {K,V} <- Values, K == Key ]),
+
+-define(MAX_PENALTY, 10).
+
+penalty_for({Key, {Min, Max}}, Values) ->
+    Penalty = lists:sum([ penalty(V, Min, Max) ||  {K,V} <- Values, K == Key ]),
     {Key, Penalty}.
 
-penalty(_, undefined, _) -> 0;
+penalty(undefined, _, _) -> 0;
+penalty(#val{avg=Avg}, Min, Max) ->
+    penalty(Avg, Min, Max);
 
-
-penalty(line_lengths, Val, Max) when Val#val.avg =< Max -> 0;
-penalty(line_lengths, Val, Max) -> bounded_max(Val#val.avg, Max);
-
-penalty(_, V, Max) when V =< Max -> 0;
-penalty(_, V, Max) -> bounded_max(V, Max).
-
-bounded_max(V1, Target) ->
-    V = V1 - Target,
-    round( 100 / math:pow(2, (Target/(V*0.25))) ).
+penalty(Val, Min, _) when Val < Min -> 0;
+penalty(Val, _, Max) when Val > Max -> ?MAX_PENALTY;
+penalty(Val, Min, Max)  ->
+    Penalty = ((Val - Min) / (Max - Min)) * ?MAX_PENALTY,
+    round(Penalty).
 
 dir(Dir) ->
     dir(Dir, []).
@@ -332,7 +343,8 @@ value_sum(X) when is_integer(X) -> X.
 analyze_function(AST={function, _, _Name, _, _}) ->
     #tree{type = function,
           name = make_name(AST),
-          raw_values = [{naming_convention, naming_convention(AST, false)},
+          raw_values = [{function_naming, function_naming(AST, false)},
+                        {variable_naming, variable_naming(AST, false)},
                         {complexity, structural_complexity(AST)},
                         {expressions_per_function, lines_per_function(AST)},
                         {clauses, clauses_per_function(AST)},
@@ -341,91 +353,94 @@ analyze_function(AST={function, _, _Name, _, _}) ->
                         {variable_steppings, variable_steppings_per_function(AST)}
                        ]}.
 
-naming_convention({function, _, Name, _, Clauses}, FromMatch) ->
-    FH = snake_case(Name),
-    FH + naming_convention(Clauses, FromMatch);
-naming_convention(L, FromMatch) when is_list(L) ->
-    sum([naming_convention(X, FromMatch) || X <- L]);
-naming_convention({clause, _, Match, Guards, Exprs}, FromMatch) ->
-    sum([naming_convention(Match, FromMatch),
-         naming_convention(Guards, FromMatch),
-         naming_convention(Exprs, FromMatch)]);
-naming_convention({match,_,LHS, _RHS}, FromMatch) ->
-    sum(naming_convention(LHS, true),
-        naming_convention(LHS, FromMatch));
-naming_convention({call,_, _, Args}, FromMatch) ->
-    naming_convention(Args, FromMatch);
-naming_convention({bin,_, Elems}, FromMatch) ->
-    naming_convention(Elems, FromMatch);
-naming_convention({bin_element,_, Elem, _, _}, FromMatch) ->
-    naming_convention(Elem, FromMatch);
-naming_convention({'case',_, Expr, Clauses}, FromMatch) ->
-    sum(naming_convention(Expr, FromMatch),
-        naming_convention(Clauses, FromMatch));
-naming_convention({'if',_, Clauses}, FromMatch) ->
-    naming_convention(Clauses, FromMatch);
-naming_convention({'receive',_,Clauses}, FromMatch) ->
-    naming_convention(Clauses, FromMatch);
-naming_convention({'receive',_,Clauses, _, AfterExprs}, FromMatch) ->
-    sum(naming_convention(Clauses, FromMatch),
-        naming_convention(AfterExprs, FromMatch));
-naming_convention({cons,_,Hd, Tl}, FromMatch) ->
-    sum(naming_convention(Hd, FromMatch) ,
-        naming_convention(Tl, FromMatch));
-naming_convention({record,_,_,Fields}, FromMatch) ->
-    naming_convention(Fields, FromMatch);
-naming_convention({record,_,Var,_,RecordField}, FromMatch) ->
-    sum(naming_convention(Var, FromMatch),
-        naming_convention(RecordField, FromMatch));
-naming_convention({record_field,_,_,Expr}, FromMatch) ->
-    naming_convention(Expr, FromMatch);
-naming_convention({record_field,_,Expr1,_,Expr2}, FromMatch) ->
-    sum(naming_convention(Expr1, FromMatch),
-        naming_convention(Expr2, FromMatch));
-naming_convention({record_index,_,_, Expr}, FromMatch) ->
-    naming_convention(Expr, FromMatch);
-naming_convention({tuple,_,Elements}, FromMatch) ->
-    naming_convention(Elements, FromMatch);
-naming_convention({op,_,_,LHS,RHS}, FromMatch) ->
-    sum(naming_convention(LHS, FromMatch),
-        naming_convention(RHS, FromMatch));
-naming_convention({op,_,_,Expr}, FromMatch) ->
-    naming_convention(Expr, FromMatch);
-naming_convention({lc,_,Body,Generator}, FromMatch) ->
-    sum(naming_convention(Body, FromMatch),
-        naming_convention(Generator, FromMatch));
-naming_convention({generate,_,Expr,Guards}, FromMatch) ->
-    sum(naming_convention(Expr, FromMatch),
-        naming_convention(Guards, FromMatch));
-naming_convention({b_generate,_,Expr,Guards}, FromMatch) ->
-    sum(naming_convention(Expr, FromMatch),
-        naming_convention(Guards, FromMatch));
-naming_convention({'catch',_,CallExpr}, FromMatch) ->
-    naming_convention(CallExpr, FromMatch);
-naming_convention({'fun',_,Expr}, FromMatch) ->
-    naming_convention(Expr, FromMatch);
-naming_convention({clauses,Clauses}, FromMatch) ->
-    naming_convention(Clauses, FromMatch);
-naming_convention({'try',_,CallExprs,_,Exprs,_}, FromMatch)->
-    sum(naming_convention(CallExprs, FromMatch),
-        naming_convention(Exprs, FromMatch));
-naming_convention({block, _, CallExprs}, FromMatch) ->
-    naming_convention(CallExprs, FromMatch);
-naming_convention({bc,_,Body,Generator}, FromMatch) ->
-    sum(naming_convention(Body, FromMatch),
-        naming_convention(Generator, FromMatch));
+function_naming({function, _, Name, _, _Clauses}, _FromMatch) ->
+    snake_case(Name).
 
-naming_convention({var,_,V}, true) -> camel_case(V);
-naming_convention({atom,_,A}, _) -> snake_case(A);
+variable_naming({function, _, _Name, _, Clauses}, FromMatch) ->
+    variable_naming(Clauses, FromMatch);
+variable_naming(L, FromMatch) when is_list(L) ->
+    sum([variable_naming(X, FromMatch) || X <- L]);
+variable_naming({clause, _, Match, Guards, Exprs}, FromMatch) ->
+%%    io:format(user,"MATCH:~p~n",[Match]),
+    sum([variable_naming(Match, true),
+         variable_naming(Guards, FromMatch),
+         variable_naming(Exprs, FromMatch)]);
+variable_naming({match,_,LHS, _RHS}, FromMatch) ->
+    sum(variable_naming(LHS, true),
+        variable_naming(LHS, FromMatch));
+variable_naming({call,_, _, Args}, FromMatch) ->
+    variable_naming(Args, FromMatch);
+variable_naming({bin,_, Elems}, FromMatch) ->
+    variable_naming(Elems, FromMatch);
+variable_naming({bin_element,_, Elem, _, _}, FromMatch) ->
+    variable_naming(Elem, FromMatch);
+variable_naming({'case',_, Expr, Clauses}, FromMatch) ->
+    sum(variable_naming(Expr, FromMatch),
+        variable_naming(Clauses, FromMatch));
+variable_naming({'if',_, Clauses}, FromMatch) ->
+    variable_naming(Clauses, FromMatch);
+variable_naming({'receive',_,Clauses}, FromMatch) ->
+    variable_naming(Clauses, FromMatch);
+variable_naming({'receive',_,Clauses, _, AfterExprs}, FromMatch) ->
+    sum(variable_naming(Clauses, FromMatch),
+        variable_naming(AfterExprs, FromMatch));
+variable_naming({cons,_,Hd, Tl}, FromMatch) ->
+    sum(variable_naming(Hd, FromMatch) ,
+        variable_naming(Tl, FromMatch));
+variable_naming({record,_,_,Fields}, FromMatch) ->
+    variable_naming(Fields, FromMatch);
+variable_naming({record,_,Var,_,RecordField}, FromMatch) ->
+    sum(variable_naming(Var, FromMatch),
+        variable_naming(RecordField, FromMatch));
+variable_naming({record_field,_,_,Expr}, FromMatch) ->
+    variable_naming(Expr, FromMatch);
+variable_naming({record_field,_,Expr1,_,Expr2}, FromMatch) ->
+    sum(variable_naming(Expr1, FromMatch),
+        variable_naming(Expr2, FromMatch));
+variable_naming({record_index,_,_, Expr}, FromMatch) ->
+    variable_naming(Expr, FromMatch);
+variable_naming({tuple,_,Elements}, FromMatch) ->
+    variable_naming(Elements, FromMatch);
+variable_naming({op,_,_,LHS,RHS}, FromMatch) ->
+    sum(variable_naming(LHS, FromMatch),
+        variable_naming(RHS, FromMatch));
+variable_naming({op,_,_,Expr}, FromMatch) ->
+    variable_naming(Expr, FromMatch);
+variable_naming({lc,_,Body,Generator}, FromMatch) ->
+    sum(variable_naming(Body, FromMatch),
+        variable_naming(Generator, FromMatch));
+variable_naming({generate,_,Expr,Guards}, FromMatch) ->
+    sum(variable_naming(Expr, FromMatch),
+        variable_naming(Guards, FromMatch));
+variable_naming({b_generate,_,Expr,Guards}, FromMatch) ->
+    sum(variable_naming(Expr, FromMatch),
+        variable_naming(Guards, FromMatch));
+variable_naming({'catch',_,CallExpr}, FromMatch) ->
+    variable_naming(CallExpr, FromMatch);
+variable_naming({'fun',_,Expr}, FromMatch) ->
+    variable_naming(Expr, FromMatch);
+variable_naming({clauses,Clauses}, FromMatch) ->
+    variable_naming(Clauses, FromMatch);
+variable_naming({'try',_,CallExprs,_,Exprs,_}, FromMatch)->
+    sum(variable_naming(CallExprs, FromMatch),
+        variable_naming(Exprs, FromMatch));
+variable_naming({block, _, CallExprs}, FromMatch) ->
+    variable_naming(CallExprs, FromMatch);
+variable_naming({bc,_,Body,Generator}, FromMatch) ->
+    sum(variable_naming(Body, FromMatch),
+        variable_naming(Generator, FromMatch));
 
-naming_convention({function,_,_}, _) -> 0;
-naming_convention({function,_,_,_}, _) -> 0;
-naming_convention({nil,_}, _) -> 0;
-naming_convention({var,_,_}, _) -> 0;
-naming_convention({string,_,_}, _) -> 0;
-naming_convention({integer,_,_}, _) -> 0;
-naming_convention({float,_,_}, _) -> 0;
-naming_convention({char,_,_}, _) -> 0.
+variable_naming({var,_,V}, true) -> camel_case(V);
+variable_naming({atom,_,A}, _) -> snake_case(A);
+
+variable_naming({function,_,_}, _) -> 0;
+variable_naming({function,_,_,_}, _) -> 0;
+variable_naming({nil,_}, _) -> 0;
+variable_naming({var,_,_}, _) -> 0;
+variable_naming({string,_,_}, _) -> 0;
+variable_naming({integer,_,_}, _) -> 0;
+variable_naming({float,_,_}, _) -> 0;
+variable_naming({char,_,_}, _) -> 0.
 
 
 snake_case(Input) ->
