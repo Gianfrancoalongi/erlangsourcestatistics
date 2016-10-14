@@ -29,6 +29,7 @@ two_bad_variable_names_in_different_function_clause_is_ok_test() ->
     Penalty = run_tc(variable_naming, Code),
     ?assertEqual(0, Penalty).
 
+
 three_bad_variable_names_in_same_function_is_NOT_ok_test() ->
     Code = ["f(S_1_1, S_2_2, S_3_3) -> "
             "   ok."],
