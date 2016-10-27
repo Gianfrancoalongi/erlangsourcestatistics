@@ -296,6 +296,70 @@ nested_clauses_test_() ->
 
 complexity_test_() ->
     [
+     {"tuple as function argument",
+      fun() ->
+              Code = ["f() -> m:f({1, 2, 3, 4})."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"tuple as function argument",
+      fun() ->
+              Code = ["f() -> "
+                      " Key = {1, 2, 3, 4},",
+                      " ok = m:f(Key)."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"tuple as function argument 2",
+      fun() ->
+              Code = ["f() -> "
+                      "   m:f({1, 2, 3, 4})."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"tuple as function argument 3",
+      fun() ->
+              Code = ["f() -> "
+                      " ok = m:f({1, 2, 3, 4})."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"unpacking result as tuple",
+      fun() ->
+              Code = ["f() -> "
+                      " {ok, F} = m:f({1, 2, 3, 4})."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"unpacking large tuple result",
+      fun() ->
+              Code = ["f() -> "
+                      " {ok, true, F} = m:f()."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(3, Penalty)
+      end},
+     {"matching in head",
+      fun() ->
+              Code = ["f({A,B}) -> A + B."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"variable matching in head",
+      fun() ->
+              Code = ["f(C = {A, B}) -> element(1,C) + A * B."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"matching in case",
+      fun() ->
+              Code = ["f() -> 
+                             case m:g() of
+                                 ok -> ok;
+                                 Err={error, _} -> Err 
+                             end."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
      {"tuples depth 2 is ok",
       fun() ->
               Code = ["f() -> {{1}, a}."],

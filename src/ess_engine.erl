@@ -595,77 +595,95 @@ is_all_integers(L) ->
 is_ascii_integer(X) when (X>=$0), (X=<$9) -> true;
 is_ascii_integer(_) -> false.
 
+complexity(AST) ->
+    FromMatchLHS = false,
+    complexity(AST, FromMatchLHS).
 
-complexity(L) when is_list(L) ->
-    max([ complexity(X) || X <- L ]);
-complexity({function, _, _, _, Clauses}) ->
-    max([ complexity(X) || X <- Clauses ]);
-complexity({clause, _, Match, Guards, Exprs}) ->
-    max([complexity(Match),
-         complexity(Guards),
-         complexity(Exprs)]);
-complexity({match,_,RHS,LHS}) ->
-    1 + max(complexity(RHS) , complexity(LHS));
-complexity({call,_, _, Args}) ->
-    1+complexity(Args);
-complexity({bin,_, Elems}) ->
-    1+complexity(Elems);
-complexity({bin_element,_, Elem, _, _}) ->
-    complexity(Elem);
-complexity({'case',_, Expr, Clauses}) ->
-    1 + max(complexity(Expr), complexity(Clauses));
-complexity({'if',_, Clauses}) ->
-    1 + complexity(Clauses);
-complexity({'receive',_,Clauses}) ->
-    1 + complexity(Clauses);
-complexity({'receive',_,Clauses, _, AfterExprs}) ->
-    1 + max(complexity(Clauses), complexity(AfterExprs));
-complexity({cons,_,Hd, Tl}) ->
-    max(complexity(Hd) , complexity(Tl));
-complexity({record,_,_,Fields}) ->
-    1+complexity(Fields);
-complexity({record,_,Var,_,RecordField}) ->
-    1+max(complexity(Var), complexity(RecordField));
-complexity({record_field,_,_,Expr}) ->
-    complexity(Expr);
-complexity({record_field,_,Expr1,_,Expr2}) ->
-    1 + (1+complexity(Expr1)) + complexity(Expr2);
-complexity({record_index,_,_,Expr}) ->
-    1+complexity(Expr);
-complexity({tuple,_,Elements}) ->
-    1+complexity(Elements);
-complexity({op,_,_,LHS,RHS}) ->
-    1+ max(complexity(LHS), complexity(RHS));
-complexity({op,_,_,Expr}) ->
-    1+complexity(Expr);
-complexity({lc,_,Body,Generator}) ->
-    1+ max(complexity(Body), complexity(Generator));
-complexity({generate,_,Expr,Guards}) ->
-    max(complexity(Expr), complexity(Guards));
-complexity({b_generate,_,Expr,Guards}) ->
-    max(complexity(Expr), complexity(Guards));
-complexity({'catch',_,CallExpr}) ->
-    1+complexity(CallExpr);
-complexity({'fun',_,Expr}) ->
-    1+complexity(Expr);
-complexity({clauses,Clauses}) ->
-    0+complexity(Clauses);
-complexity({'try',_,CallExprs,_,Exprs,_})->
-    1+ max(complexity(CallExprs), complexity(Exprs));
-complexity({block, _, CallExprs}) ->
-    1+complexity(CallExprs);
-complexity({bc,_,Body,Generator}) ->
-    1+ max(complexity(Body), complexity(Generator));
+complexity(L, FromMatchLHS) when is_list(L) ->
+    max([ complexity(X, FromMatchLHS) || X <- L ]);
+complexity({function, _, _, _, Clauses}, FromMatchLHS) ->
+    max([ complexity(X, FromMatchLHS) || X <- Clauses ]);
+complexity({clause, _, Match, Guards, Exprs}, FromMatchLHS) ->
+    max([complexity(Match, FromMatchLHS),
+         complexity(Guards, FromMatchLHS),
+         complexity(Exprs, FromMatchLHS)]);
+complexity({match, _, LHS, RHS}, FromMatchLHS) ->
+    max(complexity(LHS, true) , complexity(RHS, FromMatchLHS));
+complexity({call, _, _, Args}, FromMatchLHS) ->
+    1+complexity(Args, FromMatchLHS);
+complexity({bin, _, Elems}, FromMatchLHS) ->
+    1+complexity(Elems, FromMatchLHS);
+complexity({bin_element, _, Elem, _, _}, FromMatchLHS) ->
+    complexity(Elem, FromMatchLHS);
+complexity({'case', _, Expr, Clauses}, FromMatchLHS) ->
+    max(complexity(Expr, FromMatchLHS), complexity(Clauses, FromMatchLHS));
+complexity({'if', _, Clauses}, FromMatchLHS) ->
+    complexity(Clauses, FromMatchLHS);
+complexity({'receive', _, Clauses}, FromMatchLHS) ->
+    complexity(Clauses, FromMatchLHS);
+complexity({'receive', _, Clauses, _, AfterExprs}, FromMatchLHS) ->
+    max(complexity(Clauses, FromMatchLHS), 
+        complexity(AfterExprs, FromMatchLHS));
+complexity({cons,_,Hd, Tl}, FromMatchLHS) ->
+    max(complexity(Hd, FromMatchLHS), 
+        complexity(Tl, FromMatchLHS));
+complexity({record, _, _, Fields}, FromMatchLHS) ->
+    1+complexity(Fields, FromMatchLHS);
+complexity({record, _, Var, _, RecordField}, FromMatchLHS) ->
+    1+max(complexity(Var, FromMatchLHS), 
+          complexity(RecordField, FromMatchLHS));
+complexity({record_field, _, _, Expr}, FromMatchLHS) ->
+    complexity(Expr, FromMatchLHS);
+complexity({record_field, _, Expr1, _, Expr2}, FromMatchLHS) ->
+    1 + (1+complexity(Expr1, FromMatchLHS)) 
+        + complexity(Expr2, FromMatchLHS);
+complexity({record_index, _, _, Expr}, FromMatchLHS) ->
+    1+complexity(Expr, FromMatchLHS);
+complexity({tuple, _, Elements}, FromMatchLHS) ->
+    case FromMatchLHS andalso (length(Elements) > 2) of
+        true ->
+            length(Elements) + complexity(Elements, FromMatchLHS);
+        false ->
+            1 + complexity(Elements, FromMatchLHS)
+    end;
+complexity({op, _, _, LHS, RHS}, FromMatchLHS) ->
+    1+ max(complexity(LHS, FromMatchLHS), 
+           complexity(RHS, FromMatchLHS));
+complexity({op, _, _, Expr}, FromMatchLHS) ->
+    1+complexity(Expr, FromMatchLHS);
+complexity({lc, _, Body, Generator}, FromMatchLHS) ->
+    1+ max(complexity(Body, FromMatchLHS), 
+           complexity(Generator, FromMatchLHS));
+complexity({generate, _, Expr, Guards}, FromMatchLHS) ->
+    max(complexity(Expr, FromMatchLHS), 
+        complexity(Guards, FromMatchLHS));
+complexity({b_generate, _, Expr, Guards}, FromMatchLHS) ->
+    max(complexity(Expr, FromMatchLHS), 
+        complexity(Guards, FromMatchLHS));
+complexity({'catch', _, CallExpr}, FromMatchLHS) ->
+    1+complexity(CallExpr, FromMatchLHS);
+complexity({'fun', _, Expr}, FromMatchLHS) ->
+    1+complexity(Expr, FromMatchLHS);
+complexity({clauses, Clauses}, FromMatchLHS) ->
+    complexity(Clauses, FromMatchLHS);
+complexity({'try', _, CallExprs, _, Exprs, _}, FromMatchLHS)->
+    1+ max(complexity(CallExprs, FromMatchLHS), 
+           complexity(Exprs, FromMatchLHS));
+complexity({block, _, CallExprs}, FromMatchLHS) ->
+    1+complexity(CallExprs, FromMatchLHS);
+complexity({bc, _, Body, Generator}, FromMatchLHS) ->
+    1+ max(complexity(Body, FromMatchLHS), 
+           complexity(Generator, FromMatchLHS));
 
-complexity({function,_,_}) -> 0;
-complexity({function,_,_,_}) -> 0;
-complexity({nil,_}) -> 0;
-complexity({atom,_,_}) -> 0;
-complexity({var,_,_}) -> 0;
-complexity({string,_,_}) -> 0;
-complexity({integer,_,_}) -> 0;
-complexity({float,_,_}) -> 0;
-complexity({char,_,_}) -> 0.
+complexity({function, _, _}, _FromMatchLHS) -> 0;
+complexity({function, _, _, _}, _FromMatchLHS) -> 0;
+complexity({nil, _}, _FromMatchLHS) -> 0;
+complexity({atom, _, _}, _FromMatchLHS) -> 0;
+complexity({var, _, _}, _FromMatchLHS) -> 0;
+complexity({string, _, _}, _FromMatchLHS) -> 0;
+complexity({integer, _, _}, _FromMatchLHS) -> 0;
+complexity({float, _, _}, _FromMatchLHS) -> 0;
+complexity({char, _, _}, _FromMatchLHS) -> 0.
 
 %% --------------------------------------------------
 
