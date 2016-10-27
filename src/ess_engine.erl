@@ -345,7 +345,8 @@ analyze_function(AST={function, _, _Name, _, _}) ->
           name = make_name(AST),
           raw_values = [{function_naming, function_naming(AST, false)},
                         {variable_naming, variable_naming(AST, false)},
-                        {complexity, structural_complexity(AST)},
+                        {nested_clauses, nested_clauses(AST)},
+                        {complexity, complexity(AST)},
                         {expressions_per_function, lines_per_function(AST)},
                         {clauses, clauses_per_function(AST)},
                         {arity, function_arity(AST)},
@@ -361,7 +362,6 @@ variable_naming({function, _, _Name, _, Clauses}, FromMatch) ->
 variable_naming(L, FromMatch) when is_list(L) ->
     sum([variable_naming(X, FromMatch) || X <- L]);
 variable_naming({clause, _, Match, Guards, Exprs}, FromMatch) ->
-%%    io:format(user,"MATCH:~p~n",[Match]),
     sum([variable_naming(Match, true),
          variable_naming(Guards, FromMatch),
          variable_naming(Exprs, FromMatch)]);
@@ -595,77 +595,190 @@ is_all_integers(L) ->
 is_ascii_integer(X) when (X>=$0), (X=<$9) -> true;
 is_ascii_integer(_) -> false.
 
+complexity(AST) ->
+    FromMatchLHS = false,
+    complexity(AST, FromMatchLHS).
 
-structural_complexity(L) when is_list(L) ->
-    max([ structural_complexity(X) || X <- L ]);
-structural_complexity({function, _, _, _, Clauses}) ->
-    max([ structural_complexity(X) || X <- Clauses ]);
-structural_complexity({clause, _, Match, Guards, Exprs}) ->
-    max([structural_complexity(Match),
-         structural_complexity(Guards),
-         structural_complexity(Exprs)]);
-structural_complexity({match,_,RHS,LHS}) ->
-    1 + max(structural_complexity(RHS) , structural_complexity(LHS));
-structural_complexity({call,_, _, Args}) ->
-    1+structural_complexity(Args);
-structural_complexity({bin,_, Elems}) ->
-    1+structural_complexity(Elems);
-structural_complexity({bin_element,_, Elem, _, _}) ->
-    structural_complexity(Elem);
-structural_complexity({'case',_, Expr, Clauses}) ->
-    1 + max(structural_complexity(Expr), structural_complexity(Clauses));
-structural_complexity({'if',_, Clauses}) ->
-    1 + structural_complexity(Clauses);
-structural_complexity({'receive',_,Clauses}) ->
-    1 + structural_complexity(Clauses);
-structural_complexity({'receive',_,Clauses, _, AfterExprs}) ->
-    1 + max(structural_complexity(Clauses), structural_complexity(AfterExprs));
-structural_complexity({cons,_,Hd, Tl}) ->
-    max(structural_complexity(Hd) , structural_complexity(Tl));
-structural_complexity({record,_,_,Fields}) ->
-    1+structural_complexity(Fields);
-structural_complexity({record,_,Var,_,RecordField}) ->
-    1+max(structural_complexity(Var), structural_complexity(RecordField));
-structural_complexity({record_field,_,_,Expr}) ->
-    1+structural_complexity(Expr);
-structural_complexity({record_field,_,Expr1,_,Expr2}) ->
-    1+ max(structural_complexity(Expr1), structural_complexity(Expr2));
-structural_complexity({record_index,_,_,Expr}) ->
-    1+structural_complexity(Expr);
-structural_complexity({tuple,_,Elements}) ->
-    1+structural_complexity(Elements);
-structural_complexity({op,_,_,LHS,RHS}) ->
-    1+ max(structural_complexity(LHS), structural_complexity(RHS));
-structural_complexity({op,_,_,Expr}) ->
-    1+structural_complexity(Expr);
-structural_complexity({lc,_,Body,Generator}) ->
-    1+ max(structural_complexity(Body), structural_complexity(Generator));
-structural_complexity({generate,_,Expr,Guards}) ->
-    max(structural_complexity(Expr), structural_complexity(Guards));
-structural_complexity({b_generate,_,Expr,Guards}) ->
-    max(structural_complexity(Expr), structural_complexity(Guards));
-structural_complexity({'catch',_,CallExpr}) ->
-    1+structural_complexity(CallExpr);
-structural_complexity({'fun',_,Expr}) ->
-    1+structural_complexity(Expr);
-structural_complexity({clauses,Clauses}) ->
-    0+structural_complexity(Clauses);
-structural_complexity({'try',_,CallExprs,_,Exprs,_})->
-    1+ max(structural_complexity(CallExprs), structural_complexity(Exprs));
-structural_complexity({block, _, CallExprs}) ->
-    1+structural_complexity(CallExprs);
-structural_complexity({bc,_,Body,Generator}) ->
-    1+ max(structural_complexity(Body), structural_complexity(Generator));
+complexity(L, FromMatchLHS) when is_list(L) ->
+    max([ complexity(X, FromMatchLHS) || X <- L ]);
+complexity({function, _, _, _, Clauses}, FromMatchLHS) ->
+    max([ complexity(X, FromMatchLHS) || X <- Clauses ]);
+complexity({clause, _, Match, Guards, Exprs}, FromMatchLHS) ->
+    max([complexity(Match, FromMatchLHS),
+         complexity(Guards, FromMatchLHS),
+         complexity(Exprs, FromMatchLHS)]);
+complexity({match, _, LHS, RHS}, FromMatchLHS) ->
+    max(complexity(LHS, true) , complexity(RHS, FromMatchLHS));
+complexity({call, _, _, Args}, FromMatchLHS) ->
+    1+complexity(Args, FromMatchLHS);
+complexity({bin, _, Elems}, FromMatchLHS) ->
+    1+complexity(Elems, FromMatchLHS);
+complexity({bin_element, _, Elem, _, _}, FromMatchLHS) ->
+    complexity(Elem, FromMatchLHS);
+complexity({'case', _, Expr, Clauses}, FromMatchLHS) ->
+    max(complexity(Expr, FromMatchLHS), complexity(Clauses, FromMatchLHS));
+complexity({'if', _, Clauses}, FromMatchLHS) ->
+    complexity(Clauses, FromMatchLHS);
+complexity({'receive', _, Clauses}, FromMatchLHS) ->
+    complexity(Clauses, FromMatchLHS);
+complexity({'receive', _, Clauses, _, AfterExprs}, FromMatchLHS) ->
+    max(complexity(Clauses, FromMatchLHS), 
+        complexity(AfterExprs, FromMatchLHS));
+complexity({cons,_,Hd, Tl}, FromMatchLHS) ->
+    max(complexity(Hd, FromMatchLHS), 
+        complexity(Tl, FromMatchLHS));
+complexity({record, _, _, Fields}, FromMatchLHS) ->
+    1+complexity(Fields, FromMatchLHS);
+complexity({record, _, Var, _, RecordField}, FromMatchLHS) ->
+    1+max(complexity(Var, FromMatchLHS), 
+          complexity(RecordField, FromMatchLHS));
+complexity({record_field, _, _, Expr}, FromMatchLHS) ->
+    complexity(Expr, FromMatchLHS);
+complexity({record_field, _, Expr1, _, Expr2}, FromMatchLHS) ->
+    1 + (1+complexity(Expr1, FromMatchLHS)) 
+        + complexity(Expr2, FromMatchLHS);
+complexity({record_index, _, _, Expr}, FromMatchLHS) ->
+    1+complexity(Expr, FromMatchLHS);
+complexity({tuple, _, Elements}, FromMatchLHS) ->
+    case FromMatchLHS andalso (length(Elements) > 2) of
+        true ->
+            length(Elements) + complexity(Elements, FromMatchLHS);
+        false ->
+            1 + complexity(Elements, FromMatchLHS)
+    end;
+complexity({op, _, _, LHS, RHS}, FromMatchLHS) ->
+    1+ max(complexity(LHS, FromMatchLHS), 
+           complexity(RHS, FromMatchLHS));
+complexity({op, _, _, Expr}, FromMatchLHS) ->
+    1+complexity(Expr, FromMatchLHS);
+complexity({lc, _, Body, Generator}, FromMatchLHS) ->
+    1+ max(complexity(Body, FromMatchLHS), 
+           complexity(Generator, FromMatchLHS));
+complexity({generate, _, Expr, Guards}, FromMatchLHS) ->
+    max(complexity(Expr, FromMatchLHS), 
+        complexity(Guards, FromMatchLHS));
+complexity({b_generate, _, Expr, Guards}, FromMatchLHS) ->
+    max(complexity(Expr, FromMatchLHS), 
+        complexity(Guards, FromMatchLHS));
+complexity({'catch', _, CallExpr}, FromMatchLHS) ->
+    1+complexity(CallExpr, FromMatchLHS);
+complexity({'fun', _, Expr}, FromMatchLHS) ->
+    1+complexity(Expr, FromMatchLHS);
+complexity({clauses, Clauses}, FromMatchLHS) ->
+    complexity(Clauses, FromMatchLHS);
+complexity({'try', _, CallExprs, _, Exprs, _}, FromMatchLHS)->
+    1+ max(complexity(CallExprs, FromMatchLHS), 
+           complexity(Exprs, FromMatchLHS));
+complexity({block, _, CallExprs}, FromMatchLHS) ->
+    1+complexity(CallExprs, FromMatchLHS);
+complexity({bc, _, Body, Generator}, FromMatchLHS) ->
+    1+ max(complexity(Body, FromMatchLHS), 
+           complexity(Generator, FromMatchLHS));
 
-structural_complexity({function,_,_}) -> 0;
-structural_complexity({function,_,_,_}) -> 0;
-structural_complexity({nil,_}) -> 0;
-structural_complexity({atom,_,_}) -> 0;
-structural_complexity({var,_,_}) -> 0;
-structural_complexity({string,_,_}) -> 0;
-structural_complexity({integer,_,_}) -> 0;
-structural_complexity({float,_,_}) -> 0;
-structural_complexity({char,_,_}) -> 0.
+complexity({function, _, _}, _FromMatchLHS) -> 0;
+complexity({function, _, _, _}, _FromMatchLHS) -> 0;
+complexity({nil, _}, _FromMatchLHS) -> 0;
+complexity({atom, _, _}, _FromMatchLHS) -> 0;
+complexity({var, _, _}, _FromMatchLHS) -> 0;
+complexity({string, _, _}, _FromMatchLHS) -> 0;
+complexity({integer, _, _}, _FromMatchLHS) -> 0;
+complexity({float, _, _}, _FromMatchLHS) -> 0;
+complexity({char, _, _}, _FromMatchLHS) -> 0.
+
+%% --------------------------------------------------
+
+nested_clauses(L) ->
+    nested_clauses(L, 0).
+
+nested_clauses({function, _, _, _, Clauses}, ClauseDepth) ->
+    max([ nested_clauses(X, ClauseDepth) || X <- Clauses ]);
+nested_clauses(L, ClauseDepth) when is_list(L) ->
+    max([ nested_clauses(X, ClauseDepth) || X <- L ]);
+nested_clauses({clause, _, Match, Guards, Exprs}, ClauseDepth) ->
+    max([nested_clauses(Match, ClauseDepth),
+         nested_clauses(Guards, ClauseDepth),
+         nested_clauses(Exprs, ClauseDepth)]);
+nested_clauses({match,_,RHS,LHS}, ClauseDepth) ->
+    max(nested_clauses(RHS, ClauseDepth),
+        nested_clauses(LHS, ClauseDepth));
+nested_clauses({call,_, _, Args}, ClauseDepth) ->
+    nested_clauses(Args, ClauseDepth);
+nested_clauses({bin,_, Elems}, ClauseDepth) ->
+    nested_clauses(Elems, ClauseDepth);
+nested_clauses({bin_element,_, Elem, _, _}, ClauseDepth) ->
+    nested_clauses(Elem, ClauseDepth);
+nested_clauses({'case',_, Expr, Clauses}, ClauseDepth) ->
+    NewClauseDepth = 1 + ClauseDepth,
+    max(nested_clauses(Expr, NewClauseDepth), 
+        nested_clauses(Clauses, NewClauseDepth));
+nested_clauses({'if', _, Clauses}, ClauseDepth) ->
+    nested_clauses(Clauses, ClauseDepth + 1);
+nested_clauses({'receive', _, Clauses}, ClauseDepth) ->
+    nested_clauses(Clauses, ClauseDepth + 1);
+nested_clauses({'receive',_,Clauses, _, AfterExprs}, ClauseDepth) ->
+    NewClauseDepth = ClauseDepth + 1,
+    max(nested_clauses(Clauses, NewClauseDepth), 
+        nested_clauses(AfterExprs, NewClauseDepth));
+nested_clauses({cons,_,Hd, Tl}, ClauseDepth) ->
+    max(nested_clauses(Hd, ClauseDepth),
+        nested_clauses(Tl, ClauseDepth));
+nested_clauses({record,_,_,Fields}, ClauseDepth) ->
+    nested_clauses(Fields, ClauseDepth);
+nested_clauses({record,_,Var,_,RecordField}, ClauseDepth) ->
+    max(nested_clauses(Var, ClauseDepth), 
+        nested_clauses(RecordField, ClauseDepth));
+nested_clauses({record_field,_,_,Expr}, ClauseDepth) ->
+    nested_clauses(Expr, ClauseDepth);
+nested_clauses({record_field,_,Expr1,_,Expr2}, ClauseDepth) ->
+    max(nested_clauses(Expr1, ClauseDepth), 
+        nested_clauses(Expr2, ClauseDepth));
+nested_clauses({record_index,_,_,Expr}, ClauseDepth) ->
+    nested_clauses(Expr, ClauseDepth);
+nested_clauses({tuple,_,Elements}, ClauseDepth) ->
+    nested_clauses(Elements, ClauseDepth);
+nested_clauses({op, _, _, LHS, RHS}, ClauseDepth) ->
+    max(nested_clauses(LHS, ClauseDepth),
+        nested_clauses(RHS, ClauseDepth));
+nested_clauses({op, _, _, Expr}, ClauseDepth) ->
+    nested_clauses(Expr, ClauseDepth);
+nested_clauses({lc, _, Body, Generator}, ClauseDepth) ->
+    max(nested_clauses(Body, ClauseDepth),
+        nested_clauses(Generator, ClauseDepth));
+nested_clauses({generate, _, Expr, Guards}, ClauseDepth) ->
+    max(nested_clauses(Expr, ClauseDepth), 
+        nested_clauses(Guards, ClauseDepth));
+nested_clauses({b_generate, _, Expr, Guards}, ClauseDepth) ->
+    max(nested_clauses(Expr, ClauseDepth), 
+        nested_clauses(Guards, ClauseDepth));
+nested_clauses({'catch', _, CallExpr}, ClauseDepth) ->
+    nested_clauses(CallExpr, ClauseDepth);
+nested_clauses({'fun', _, Expr}, ClauseDepth) ->
+    nested_clauses(Expr, ClauseDepth);
+nested_clauses({clauses,Clauses}, ClauseDepth) ->
+    nested_clauses(Clauses, ClauseDepth);
+nested_clauses({'try', _, CallExprs, Clauses, CatchClauses,_}, ClauseDepth)->
+    NewClauseDepth = ClauseDepth + 1,
+    max([nested_clauses(CallExprs, NewClauseDepth), 
+         nested_clauses(Clauses, NewClauseDepth),
+         nested_clauses(CatchClauses, NewClauseDepth)]);
+nested_clauses({block, _, CallExprs}, ClauseDepth) ->
+    nested_clauses(CallExprs, ClauseDepth +1 );
+nested_clauses({bc,_,Body,Generator}, ClauseDepth) ->
+    max(nested_clauses(Body, ClauseDepth), 
+        nested_clauses(Generator, ClauseDepth));
+
+nested_clauses({function, _, _}, ClauseDepth) -> ClauseDepth;
+nested_clauses({function, _, _, _}, ClauseDepth) -> ClauseDepth;
+nested_clauses({nil, _}, ClauseDepth) -> ClauseDepth;
+nested_clauses({atom, _, _}, ClauseDepth) -> ClauseDepth;
+nested_clauses({var, _, _}, ClauseDepth) -> ClauseDepth;
+nested_clauses({string, _, _}, ClauseDepth) -> ClauseDepth;
+nested_clauses({integer, _, _}, ClauseDepth) -> ClauseDepth;
+nested_clauses({float, _, _}, ClauseDepth) -> ClauseDepth;
+nested_clauses({char, _, _}, ClauseDepth) -> ClauseDepth.
+
+%% ------------------------------------------------------------
+
 
 repeats_on_same_line(LNs) ->
     repeats_on_same_line(LNs,hd(LNs),0).

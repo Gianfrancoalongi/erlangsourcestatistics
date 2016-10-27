@@ -60,10 +60,11 @@ default_metrics() ->
      {clauses, {4, 10}},
      {expressions_per_function, {20, 50}},
      {variable_steppings, {1, 5}},
-
      {export_all, {0,1}},
      {space_after_comma, {3, 10}},
      {warnings, {0, 1}},
+     {nested_clauses, {1, 3}},
+
      {complexity, {2, 6}},
      {line_lengths, {75, 120}}].
 
