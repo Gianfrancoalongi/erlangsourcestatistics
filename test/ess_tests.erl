@@ -151,6 +151,228 @@ variable_stepping_syntax_bases_on_new_old_test() ->
     Penalty = run_tc(variable_steppings, Code),
     ?assertEqual(3, Penalty).
     
+export_all_is_penalized_test() ->
+    Code = ["-compile(export_all)."],
+    Penalty = run_tc(export_all, Code),
+    ?assertEqual(10, Penalty).
+
+up_to_three_missing_space_after_comma_is_ok_test() ->
+    Code = ["f(A,B,C,D) -> ok."],
+    Penalty = run_tc(space_after_comma, Code),
+    ?assertEqual(0, Penalty).
+
+beyond_three_missing_space_after_comma_test_() ->
+    [{"Function head", 
+      fun() ->
+              Code = ["f(A,B,C,D,E) -> ok."],
+              Penalty = run_tc(space_after_comma, Code),
+              ?assertEqual(1, Penalty)
+      end},
+     {"Tuple in body", 
+      fun() ->
+              Code = ["f() -> {1,2,3,4,5}."],
+              Penalty = run_tc(space_after_comma, Code),
+              ?assertEqual(1, Penalty)
+      end},
+     {"List in body", 
+      fun() ->
+              Code = ["f() -> [1,2,3,4,5]."],
+              Penalty = run_tc(space_after_comma, Code),
+              ?assertEqual(1, Penalty)
+      end},
+     {"In function calls", 
+      fun() ->
+              Code = ["f() -> m:g(1,2,3,4,5)."],
+              Penalty = run_tc(space_after_comma, Code),
+              ?assertEqual(1, Penalty)
+      end},
+     {"pattern matching", 
+      fun() ->
+              Code = ["f() -> [1,2,3,4,5] = m:g()."],
+              Penalty = run_tc(space_after_comma, Code),
+              ?assertEqual(1, Penalty)
+      end}
+    ].
+
+no_compiler_warnings_is_ok_test() ->
+    Code = ["f(A) -> A."],
+    Penalty = run_tc(warnings, Code),
+    ?assertEqual(0, Penalty).
+
+compiler_warnings_test() ->
+    Code = ["f(A) -> ok."],
+    Penalty = run_tc(warnings, Code),
+    ?assertEqual(10, Penalty).
+
+
+nested_clauses_test_() ->
+    [{"cases",
+      fun() ->
+              Code = ["
+                      f(A) -> 
+                             case g:t() of
+                                 ok -> 
+                                     case e:w() of 
+                                         ok -> ok 
+                                     end; 
+                                 _ -> false 
+                             end."],
+              Penalty = run_tc(nested_clauses, Code),
+              ?assertEqual(5, Penalty)
+      end},
+
+     {"if nesting",
+      fun() ->
+              Code = ["
+                      f(A) -> 
+                             if is_integer(1) -> 
+                                     if is_atom(1) -> ok;
+                                        true -> false
+                                     end;
+                                true -> ok
+                             end."],
+              Penalty = run_tc(nested_clauses, Code),
+              ?assertEqual(5, Penalty)
+      end},
+     {"receive",
+      fun() ->
+              Code = ["
+                      f(A) -> 
+                             receive
+                                 ok -> 
+                                     receive
+                                         ok -> ok 
+                                     end; 
+                                 _ -> false 
+                             end."],
+              Penalty = run_tc(nested_clauses, Code),
+              ?assertEqual(5, Penalty)
+      end},
+     {"try",
+      fun() ->
+              Code = ["
+                      f(A) -> 
+                             try 
+                                 g:t(),
+                                 try 
+                                     e:w()
+                                 catch _:_ -> e:w()
+                                 end
+                             catch _:_ -> 
+                                     e:w()
+                             end."],
+              Penalty = run_tc(nested_clauses, Code),
+              ?assertEqual(5, Penalty)
+      end},
+     {"try of",
+      fun() ->
+              Code = ["
+                      f(A) -> 
+                             try g:t() of
+                                 ok -> 
+                                     try e:w() of
+                                         ok -> ok
+                                     catch _:_ -> e:w()
+                                 end
+                             catch _:_ -> 
+                                     e:w()
+                             end."],
+              Penalty = run_tc(nested_clauses, Code),
+              ?assertEqual(5, Penalty)
+      end},
+     {"block",
+      fun() ->
+              Code = ["
+                      f(A) -> 
+                           begin
+                             begin
+                                A = 1
+                             end
+                           end."],
+              Penalty = run_tc(nested_clauses, Code),
+              ?assertEqual(5, Penalty)
+      end}
+    ].
+
+complexity_test_() ->
+    [
+     {"tuples depth 2 is ok",
+      fun() ->
+              Code = ["f() -> {{1}, a}."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"tuples",
+      fun() ->
+              Code = ["f() -> {{1, {2}}, a}."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(3, Penalty)
+      end},
+     {"lists are not analysed (definition is recursive)",
+      fun() ->
+              Code = ["f() -> [[1, [2]], a]."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"functions",
+      fun() ->
+              Code = ["f() -> m:f(m:g(m:h()))."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(3, Penalty)
+      end},
+     {"record field assignment",
+      fun() ->
+              Code = ["-record(r1,{a}).",
+                      "f() -> #r1{a = 2}."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"record within record",
+      fun() ->
+              Code = ["-record(r1,{a}).",
+                      "-record(r2,{}).",
+                      "f() -> #r1{a = #r2{}}."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"field access of record within record ok if simple",
+      fun() ->
+              Code = ["-record(r1,{a}).",
+                      "-record(r2,{b}).",
+                      "f() -> #r1{a = #r2{b = 3}}."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"field access of record within record",
+      fun() ->
+              Code = ["-record(r1,{a}).",
+                      "-record(r2,{b}).",
+                      "-record(r3,{c}).",
+                      "f() -> #r1{a = #r2{b = #r3{}}}."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(3, Penalty)
+      end},
+     {"record field used as record",
+      fun() ->
+              Code = ["-record(r1,{a}).",
+                      "-record(r2,{b}).",
+                      "-record(r3,{c}).",
+                      "f(A) -> (A#r1.a)#r2{}."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(3, Penalty)
+      end},
+     {"record field once is ok",
+      fun() ->
+              Code = ["-record(r1,{a}).",
+                      "-record(r2,{b}).",
+                      "-record(r3,{c}).",
+                      "f(A) -> A#r1.a."],
+              Penalty = run_tc(complexity, Code),
+              ?assertEqual(0, Penalty)
+      end}
+    ].
+      
+
 
 %% ---------------------------------------------------------------------------
 run_tc(Metric, CodeSnippet) ->
