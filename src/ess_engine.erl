@@ -573,7 +573,7 @@ get_linenumbers({clause,_Line,_,_,Expressions}) ->
     get_linenumbers_body(Expressions).
 
 get_linenumbers_body([]) ->
-    [];
+    [2];
 get_linenumbers_body([{match,L,LHS,RHS}|R]) ->
     RHSLines = get_linenumbers_body([RHS]),
     LHSLines = get_linenumbers_body([LHS]),
