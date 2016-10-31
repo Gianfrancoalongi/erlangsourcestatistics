@@ -42,8 +42,9 @@ traverse(AST = {'catch', _, CallExpr}, NodeF, Gen, Hist) ->
 
 traverse(AST = {clause, _, Match, Guards, Exprs}, NodeF, Gen, Hist) ->
     NewHist = set_hist(AST, Hist),
+    MatchHist = set_hist(match, NewHist),
     NodeF(Gen(AST, NewHist),
-          [traverse(Match, NodeF, Gen, NewHist),
+          [traverse(Match, NodeF, Gen, MatchHist),
            traverse(Guards, NodeF, Gen, NewHist),
            traverse(Exprs, NodeF, Gen, NewHist)]);
  

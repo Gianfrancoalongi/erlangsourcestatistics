@@ -344,7 +344,7 @@ analyze_function(AST={function, _, _Name, _, _}) ->
     #tree{type = function,
           name = make_name(AST),
           raw_values = [{function_naming, function_naming(AST, false)},
-                        {variable_naming, variable_naming(AST, false)},
+                        {variable_naming, variable_naming(AST)},
                         {nested_clauses, nested_clauses(AST)},
                         {complexity, complexity(AST)},
                         {expressions_per_function, lines_per_function(AST)},
@@ -358,91 +358,111 @@ analyze_function(AST={function, _, _Name, _, _}) ->
 function_naming({function, _, Name, _, _Clauses}, _FromMatch) ->
     snake_case(Name).
 
+variable_naming(AST) ->
+    NodeF = fun variable_naming_node/2,
+    Gen  = fun variable_naming_gen/2,
+    History = #hist{},
+    ess_ast:traverse(AST, NodeF, Gen, History).
 
-variable_naming({function, _, _Name, _, Clauses}, FromMatch) ->
-    variable_naming(Clauses, FromMatch);
-variable_naming(L, FromMatch) when is_list(L) ->
-    sum([variable_naming(X, FromMatch) || X <- L]);
-variable_naming({clause, _, Match, Guards, Exprs}, FromMatch) ->
-    sum([variable_naming(Match, true),
-         variable_naming(Guards, FromMatch),
-         variable_naming(Exprs, FromMatch)]);
-variable_naming({match, _,LHS, RHS}, FromMatch) ->
-    sum(variable_naming(LHS, true),
-        variable_naming(RHS, FromMatch));
-variable_naming({call,_, _, Args}, FromMatch) ->
-    variable_naming(Args, FromMatch);
-variable_naming({bin,_, Elems}, FromMatch) ->
-    variable_naming(Elems, FromMatch);
-variable_naming({bin_element,_, Elem, _, _}, FromMatch) ->
-    variable_naming(Elem, FromMatch);
-variable_naming({'case',_, Expr, Clauses}, FromMatch) ->
-    sum(variable_naming(Expr, FromMatch),
-        variable_naming(Clauses, FromMatch));
-variable_naming({'if',_, Clauses}, FromMatch) ->
-    variable_naming(Clauses, FromMatch);
-variable_naming({'receive',_,Clauses}, FromMatch) ->
-    variable_naming(Clauses, FromMatch);
-variable_naming({'receive',_,Clauses, _, AfterExprs}, FromMatch) ->
-    sum(variable_naming(Clauses, FromMatch),
-        variable_naming(AfterExprs, FromMatch));
-variable_naming({cons,_,Hd, Tl}, FromMatch) ->
-    sum(variable_naming(Hd, FromMatch) ,
-        variable_naming(Tl, FromMatch));
-variable_naming({record,_,_,Fields}, FromMatch) ->
-    variable_naming(Fields, FromMatch);
-variable_naming({record,_,Var,_,RecordField}, FromMatch) ->
-    sum(variable_naming(Var, FromMatch),
-        variable_naming(RecordField, FromMatch));
-variable_naming({record_field,_,_,Expr}, FromMatch) ->
-    variable_naming(Expr, FromMatch);
-variable_naming({record_field,_,Expr1,_,Expr2}, FromMatch) ->
-    sum(variable_naming(Expr1, FromMatch),
-        variable_naming(Expr2, FromMatch));
-variable_naming({record_index,_,_, Expr}, FromMatch) ->
-    variable_naming(Expr, FromMatch);
-variable_naming({tuple,_,Elements}, FromMatch) ->
-    variable_naming(Elements, FromMatch);
-variable_naming({op,_,_,LHS,RHS}, FromMatch) ->
-    sum(variable_naming(LHS, FromMatch),
-        variable_naming(RHS, FromMatch));
-variable_naming({op,_,_,Expr}, FromMatch) ->
-    variable_naming(Expr, FromMatch);
-variable_naming({lc,_,Body,Generator}, FromMatch) ->
-    sum(variable_naming(Body, FromMatch),
-        variable_naming(Generator, FromMatch));
-variable_naming({generate,_,Expr,Guards}, FromMatch) ->
-    sum(variable_naming(Expr, FromMatch),
-        variable_naming(Guards, FromMatch));
-variable_naming({b_generate,_,Expr,Guards}, FromMatch) ->
-    sum(variable_naming(Expr, FromMatch),
-        variable_naming(Guards, FromMatch));
-variable_naming({'catch',_,CallExpr}, FromMatch) ->
-    variable_naming(CallExpr, FromMatch);
-variable_naming({'fun',_,Expr}, FromMatch) ->
-    variable_naming(Expr, FromMatch);
-variable_naming({clauses,Clauses}, FromMatch) ->
-    variable_naming(Clauses, FromMatch);
-variable_naming({'try',_,CallExprs,_,Exprs,_}, FromMatch)->
-    sum(variable_naming(CallExprs, FromMatch),
-        variable_naming(Exprs, FromMatch));
-variable_naming({block, _, CallExprs}, FromMatch) ->
-    variable_naming(CallExprs, FromMatch);
-variable_naming({bc,_,Body,Generator}, FromMatch) ->
-    sum(variable_naming(Body, FromMatch),
-        variable_naming(Generator, FromMatch));
+variable_naming_node(Value, Chs) ->
+    Value + sum(Chs).
 
-variable_naming({var,_,V}, true) -> camel_case(V);
-variable_naming({atom,_,A}, _) -> snake_case(A);
+variable_naming_gen({var, _, V}, H) ->
+    case H#hist.match > 0 of
+        true ->
+            camel_case(V);
+        false ->
+            0
+    end;
+variable_naming_gen({atom, _, A}, _) ->
+    snake_case(A);
+variable_naming_gen(_, _) ->
+    0.
 
-variable_naming({function,_,_}, _) -> 0;
-variable_naming({function,_,_,_}, _) -> 0;
-variable_naming({nil,_}, _) -> 0;
-variable_naming({var,_,_}, _) -> 0;
-variable_naming({string,_,_}, _) -> 0;
-variable_naming({integer,_,_}, _) -> 0;
-variable_naming({float,_,_}, _) -> 0;
-variable_naming({char,_,_}, _) -> 0.
+%% variable_naming({function, _, _Name, _, Clauses}, FromMatch) ->
+%%     variable_naming(Clauses, FromMatch);
+%% variable_naming(L, FromMatch) when is_list(L) ->
+%%     sum([variable_naming(X, FromMatch) || X <- L]);
+%% variable_naming({clause, _, Match, Guards, Exprs}, FromMatch) ->
+%%     sum([variable_naming(Match, true),
+%%          variable_naming(Guards, FromMatch),
+%%          variable_naming(Exprs, FromMatch)]);
+%% variable_naming({match, _,LHS, RHS}, FromMatch) ->
+%%     sum(variable_naming(LHS, true),
+%%         variable_naming(RHS, FromMatch));
+%% variable_naming({call,_, _, Args}, FromMatch) ->
+%%     variable_naming(Args, FromMatch);
+%% variable_naming({bin,_, Elems}, FromMatch) ->
+%%     variable_naming(Elems, FromMatch);
+%% variable_naming({bin_element,_, Elem, _, _}, FromMatch) ->
+%%     variable_naming(Elem, FromMatch);
+%% variable_naming({'case',_, Expr, Clauses}, FromMatch) ->
+%%     sum(variable_naming(Expr, FromMatch),
+%%         variable_naming(Clauses, FromMatch));
+%% variable_naming({'if',_, Clauses}, FromMatch) ->
+%%     variable_naming(Clauses, FromMatch);
+%% variable_naming({'receive',_,Clauses}, FromMatch) ->
+%%     variable_naming(Clauses, FromMatch);
+%% variable_naming({'receive',_,Clauses, _, AfterExprs}, FromMatch) ->
+%%     sum(variable_naming(Clauses, FromMatch),
+%%         variable_naming(AfterExprs, FromMatch));
+%% variable_naming({cons,_,Hd, Tl}, FromMatch) ->
+%%     sum(variable_naming(Hd, FromMatch) ,
+%%         variable_naming(Tl, FromMatch));
+%% variable_naming({record,_,_,Fields}, FromMatch) ->
+%%     variable_naming(Fields, FromMatch);
+%% variable_naming({record,_,Var,_,RecordField}, FromMatch) ->
+%%     sum(variable_naming(Var, FromMatch),
+%%         variable_naming(RecordField, FromMatch));
+%% variable_naming({record_field,_,_,Expr}, FromMatch) ->
+%%     variable_naming(Expr, FromMatch);
+%% variable_naming({record_field,_,Expr1,_,Expr2}, FromMatch) ->
+%%     sum(variable_naming(Expr1, FromMatch),
+%%         variable_naming(Expr2, FromMatch));
+%% variable_naming({record_index,_,_, Expr}, FromMatch) ->
+%%     variable_naming(Expr, FromMatch);
+%% variable_naming({tuple,_,Elements}, FromMatch) ->
+%%     variable_naming(Elements, FromMatch);
+%% variable_naming({op,_,_,LHS,RHS}, FromMatch) ->
+%%     sum(variable_naming(LHS, FromMatch),
+%%         variable_naming(RHS, FromMatch));
+%% variable_naming({op,_,_,Expr}, FromMatch) ->
+%%     variable_naming(Expr, FromMatch);
+%% variable_naming({lc,_,Body,Generator}, FromMatch) ->
+%%     sum(variable_naming(Body, FromMatch),
+%%         variable_naming(Generator, FromMatch));
+%% variable_naming({generate,_,Expr,Guards}, FromMatch) ->
+%%     sum(variable_naming(Expr, FromMatch),
+%%         variable_naming(Guards, FromMatch));
+%% variable_naming({b_generate,_,Expr,Guards}, FromMatch) ->
+%%     sum(variable_naming(Expr, FromMatch),
+%%         variable_naming(Guards, FromMatch));
+%% variable_naming({'catch',_,CallExpr}, FromMatch) ->
+%%     variable_naming(CallExpr, FromMatch);
+%% variable_naming({'fun',_,Expr}, FromMatch) ->
+%%     variable_naming(Expr, FromMatch);
+%% variable_naming({clauses,Clauses}, FromMatch) ->
+%%     variable_naming(Clauses, FromMatch);
+%% variable_naming({'try',_,CallExprs,_,Exprs,_}, FromMatch)->
+%%     sum(variable_naming(CallExprs, FromMatch),
+%%         variable_naming(Exprs, FromMatch));
+%% variable_naming({block, _, CallExprs}, FromMatch) ->
+%%     variable_naming(CallExprs, FromMatch);
+%% variable_naming({bc,_,Body,Generator}, FromMatch) ->
+%%     sum(variable_naming(Body, FromMatch),
+%%         variable_naming(Generator, FromMatch));
+
+%% variable_naming({var,_,V}, true) -> camel_case(V);
+%% variable_naming({atom,_,A}, _) -> snake_case(A);
+
+%% variable_naming({function,_,_}, _) -> 0;
+%% variable_naming({function,_,_,_}, _) -> 0;
+%% variable_naming({nil,_}, _) -> 0;
+%% variable_naming({var,_,_}, _) -> 0;
+%% variable_naming({string,_,_}, _) -> 0;
+%% variable_naming({integer,_,_}, _) -> 0;
+%% variable_naming({float,_,_}, _) -> 0;
+%% variable_naming({char,_,_}, _) -> 0.
 
 
 snake_case(Input) ->
@@ -796,7 +816,7 @@ get_linenumbers_body([{Marker,LN,_,_,_}|T]) when is_atom(Marker) ->
 
 usort(L) -> lists:usort(L).
 
-sum(A, B) -> A+B.
+%%sum(A, B) -> A+B.
 sum(L) -> lists:sum(L).
 
 max([]) -> 0;
