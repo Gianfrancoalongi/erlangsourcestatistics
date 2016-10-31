@@ -572,96 +572,40 @@ is_complexity_plus_one(Type) ->
 
 
 %% --------------------------------------------------
+nested_clauses(AST) ->
+    NodeF = fun nested_clauses_node/2,
+    Gen  = fun nested_clauses_gen/2,
+    History = #hist{},
+    ess_ast:traverse(AST, NodeF, Gen, History).
 
-nested_clauses(L) ->
-    nested_clauses(L, 0).
+nested_clauses_node(Val, Chs) ->
+    Val + max(Chs).
 
-nested_clauses({function, _, _, _, Clauses}, ClauseDepth) ->
-    max([ nested_clauses(X, ClauseDepth) || X <- Clauses ]);
-nested_clauses(L, ClauseDepth) when is_list(L) ->
-    max([ nested_clauses(X, ClauseDepth) || X <- L ]);
-nested_clauses({clause, _, Match, Guards, Exprs}, ClauseDepth) ->
-    max([nested_clauses(Match, ClauseDepth),
-         nested_clauses(Guards, ClauseDepth),
-         nested_clauses(Exprs, ClauseDepth)]);
-nested_clauses({match,_,RHS,LHS}, ClauseDepth) ->
-    max(nested_clauses(RHS, ClauseDepth),
-        nested_clauses(LHS, ClauseDepth));
-nested_clauses({call,_, _, Args}, ClauseDepth) ->
-    nested_clauses(Args, ClauseDepth);
-nested_clauses({bin,_, Elems}, ClauseDepth) ->
-    nested_clauses(Elems, ClauseDepth);
-nested_clauses({bin_element,_, Elem, _, _}, ClauseDepth) ->
-    nested_clauses(Elem, ClauseDepth);
-nested_clauses({'case',_, Expr, Clauses}, ClauseDepth) ->
-    NewClauseDepth = 1 + ClauseDepth,
-    max(nested_clauses(Expr, NewClauseDepth), 
-        nested_clauses(Clauses, NewClauseDepth));
-nested_clauses({'if', _, Clauses}, ClauseDepth) ->
-    nested_clauses(Clauses, ClauseDepth + 1);
-nested_clauses({'receive', _, Clauses}, ClauseDepth) ->
-    nested_clauses(Clauses, ClauseDepth + 1);
-nested_clauses({'receive',_,Clauses, _, AfterExprs}, ClauseDepth) ->
-    NewClauseDepth = ClauseDepth + 1,
-    max(nested_clauses(Clauses, NewClauseDepth), 
-        nested_clauses(AfterExprs, NewClauseDepth));
-nested_clauses({cons,_,Hd, Tl}, ClauseDepth) ->
-    max(nested_clauses(Hd, ClauseDepth),
-        nested_clauses(Tl, ClauseDepth));
-nested_clauses({record,_,_,Fields}, ClauseDepth) ->
-    nested_clauses(Fields, ClauseDepth);
-nested_clauses({record,_,Var,_,RecordField}, ClauseDepth) ->
-    max(nested_clauses(Var, ClauseDepth), 
-        nested_clauses(RecordField, ClauseDepth));
-nested_clauses({record_field,_,_,Expr}, ClauseDepth) ->
-    nested_clauses(Expr, ClauseDepth);
-nested_clauses({record_field,_,Expr1,_,Expr2}, ClauseDepth) ->
-    max(nested_clauses(Expr1, ClauseDepth), 
-        nested_clauses(Expr2, ClauseDepth));
-nested_clauses({record_index,_,_,Expr}, ClauseDepth) ->
-    nested_clauses(Expr, ClauseDepth);
-nested_clauses({tuple,_,Elements}, ClauseDepth) ->
-    nested_clauses(Elements, ClauseDepth);
-nested_clauses({op, _, _, LHS, RHS}, ClauseDepth) ->
-    max(nested_clauses(LHS, ClauseDepth),
-        nested_clauses(RHS, ClauseDepth));
-nested_clauses({op, _, _, Expr}, ClauseDepth) ->
-    nested_clauses(Expr, ClauseDepth);
-nested_clauses({lc, _, Body, Generator}, ClauseDepth) ->
-    max(nested_clauses(Body, ClauseDepth),
-        nested_clauses(Generator, ClauseDepth));
-nested_clauses({generate, _, Expr, Guards}, ClauseDepth) ->
-    max(nested_clauses(Expr, ClauseDepth), 
-        nested_clauses(Guards, ClauseDepth));
-nested_clauses({b_generate, _, Expr, Guards}, ClauseDepth) ->
-    max(nested_clauses(Expr, ClauseDepth), 
-        nested_clauses(Guards, ClauseDepth));
-nested_clauses({'catch', _, CallExpr}, ClauseDepth) ->
-    nested_clauses(CallExpr, ClauseDepth);
-nested_clauses({'fun', _, Expr}, ClauseDepth) ->
-    nested_clauses(Expr, ClauseDepth);
-nested_clauses({clauses,Clauses}, ClauseDepth) ->
-    nested_clauses(Clauses, ClauseDepth);
-nested_clauses({'try', _, CallExprs, Clauses, CatchClauses,_}, ClauseDepth)->
-    NewClauseDepth = ClauseDepth + 1,
-    max([nested_clauses(CallExprs, NewClauseDepth), 
-         nested_clauses(Clauses, NewClauseDepth),
-         nested_clauses(CatchClauses, NewClauseDepth)]);
-nested_clauses({block, _, CallExprs}, ClauseDepth) ->
-    nested_clauses(CallExprs, ClauseDepth +1 );
-nested_clauses({bc,_,Body,Generator}, ClauseDepth) ->
-    max(nested_clauses(Body, ClauseDepth), 
-        nested_clauses(Generator, ClauseDepth));
+nested_clauses_gen(AST, Hist) ->
+    case is_leaf(AST) of
+        true ->
+            get_clause_depth(Hist);
+        false ->
+            0
+    end.
 
-nested_clauses({function, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({function, _, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({nil, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({atom, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({var, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({string, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({integer, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({float, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({char, _, _}, ClauseDepth) -> ClauseDepth.
+get_clause_depth(#hist{'case' = C,
+                       'try' = T,
+                       'if' = I,
+                       'receive' = R,
+                       'block' = B}) ->
+    C + T + I + R + B.
+
+is_leaf({function, _, _}) -> true;
+is_leaf({function, _, _, _}) -> true;
+is_leaf({nil, _}) -> true;
+is_leaf({atom, _, _}) -> true;
+is_leaf({var, _, _}) -> true;
+is_leaf({string, _, _}) -> true;
+is_leaf({integer, _, _}) -> true;
+is_leaf({float, _, _}) -> true;
+is_leaf({char, _, _}) -> true;
+is_leaf(_) -> false.
 
 %% ------------------------------------------------------------
 
