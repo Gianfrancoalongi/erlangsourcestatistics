@@ -355,9 +355,11 @@ analyze_function(AST={function, _, _Name, _, _}) ->
                        ]}.
 
 
+%% --------------------------------------------------
 function_naming({function, _, Name, _, _Clauses}, _FromMatch) ->
     snake_case(Name).
 
+%% --------------------------------------------------
 variable_naming(AST) ->
     NodeF = fun variable_naming_node/2,
     Gen  = fun variable_naming_gen/2,
@@ -379,57 +381,12 @@ variable_naming_gen({atom, _, A}, _) ->
 variable_naming_gen(_, _) ->
     0.
 
-snake_case(Input) ->
-    case is_snake_cased(to_string(Input)) of
-        true -> 0;
-        _ -> 1
-    end.
-
-is_snake_cased(String) ->
-    OnlyLowerCase = string:to_lower(String) == String,
-    HasUnderscore = lists:member($_, String),
-    IMN = is_module_name(String),
-    OnlyLowerCase or HasUnderscore or IMN.
-
-is_module_name(String) ->
-    index_of_first_uppercase(String) =< 4.
-
-index_of_first_uppercase(S) ->
-    index_of_first_uppercase(1, S).
-
-index_of_first_uppercase(_, []) ->
-    0;
-index_of_first_uppercase(Ix, [C|_]) when C =< $Z, C >= $A ->
-    Ix;
-index_of_first_uppercase(Ix, [_|Cs]) ->
-    index_of_first_uppercase(Ix+1, Cs).
-
-camel_case(Input) ->
-    case is_camel_cased(to_string(Input)) of
-        true -> 0;
-        _ ->  1
-    end.
-
-is_camel_cased([$_|_]) ->
-    true;
-is_camel_cased(String) when length(String) > 3 ->
-    HasUpperCase = string:to_lower(String) /= String,
-    HasLowerCase = string:to_upper(String) /= String,
-    HasUnderscore = lists:member($_, String),
-    HasUpperCase andalso HasLowerCase andalso not HasUnderscore;
-is_camel_cased(_) ->
-    true.
-
-to_string(X) when is_atom(X) -> atom_to_list(X);
-to_string(X) when is_list(X) -> X.
-
-make_name({function, _, Name, Arity, _}) ->
-    list_to_atom(lists:flatten(io_lib:format("~p|~p",[Name, Arity]))).
-
+%% --------------------------------------------------
 warning_metric(Warnings) ->
     {warnings, length(Warnings)}.
 
-expressions_per_function_line({function,_,_,_,Clauses}) ->
+%% --------------------------------------------------
+expressions_per_function_line({function, _, _, _, Clauses}) ->
     LNs = [ get_toplevel_linenumbers(C) || C <- Clauses],
     ROSL = repeats_on_same_line(lists:flatten(LNs)),
     calc_avg(#val{max=lists:max(ROSL),
@@ -442,6 +399,7 @@ calc_avg(V=#val{n=0}) ->
 calc_avg(V=#val{n=N, sum=Sum}) ->
     V#val{avg = round(Sum / N)}.
 
+%% --------------------------------------------------
 lines_per_function(AST) ->
     LNs = get_linenumbers(AST),
     length(lists:usort(lists:flatten(LNs))).
@@ -458,6 +416,7 @@ function_arity(AST) ->
 clauses_per_function(AST) ->
     length(function_clauses(AST)).
 
+%% --------------------------------------------------
 variable_steppings_per_function({function,_,_,_,Clauses}) ->
     sum([ variable_steppings_in_body(Clause) || Clause <- Clauses ]).
 
@@ -531,11 +490,7 @@ is_all_integers(L) ->
 is_ascii_integer(X) when (X>=$0), (X=<$9) -> true;
 is_ascii_integer(_) -> false.
 
-    %% dbg:tracer(),
-    %% dbg:p(all,[c]),
-    %% dbg:tpl(ess_engine, complexity_gen, x),
-    %% dbg:tpl(ess_engine, complexity_node, x),
-
+%% --------------------------------------------------
 complexity(AST) ->
     NodeF = fun complexity_node/2,
     Gen  = fun complexity_gen/2,
@@ -596,20 +551,7 @@ get_clause_depth(#hist{'case' = C,
                        'block' = B}) ->
     C + T + I + R + B.
 
-is_leaf({function, _, _}) -> true;
-is_leaf({function, _, _, _}) -> true;
-is_leaf({nil, _}) -> true;
-is_leaf({atom, _, _}) -> true;
-is_leaf({var, _, _}) -> true;
-is_leaf({string, _, _}) -> true;
-is_leaf({integer, _, _}) -> true;
-is_leaf({float, _, _}) -> true;
-is_leaf({char, _, _}) -> true;
-is_leaf(_) -> false.
-
 %% ------------------------------------------------------------
-
-
 repeats_on_same_line(LNs) ->
     repeats_on_same_line(LNs,hd(LNs),0).
 
@@ -667,10 +609,68 @@ get_linenumbers_body([{Marker,LN,_,_}|T]) when is_atom(Marker) ->
 get_linenumbers_body([{Marker,LN,_,_,_}|T]) when is_atom(Marker) ->
     [LN|get_linenumbers_body(T)].
 
+snake_case(Input) ->
+    case is_snake_cased(to_string(Input)) of
+        true -> 0;
+        _ -> 1
+    end.
+
+is_snake_cased(String) ->
+    OnlyLowerCase = string:to_lower(String) == String,
+    HasUnderscore = lists:member($_, String),
+    IMN = is_module_name(String),
+    OnlyLowerCase or HasUnderscore or IMN.
+
+is_module_name(String) ->
+    index_of_first_uppercase(String) =< 4.
+
+index_of_first_uppercase(S) ->
+    index_of_first_uppercase(1, S).
+
+index_of_first_uppercase(_, []) ->
+    0;
+index_of_first_uppercase(Ix, [C|_]) when C =< $Z, C >= $A ->
+    Ix;
+index_of_first_uppercase(Ix, [_|Cs]) ->
+    index_of_first_uppercase(Ix+1, Cs).
+
+camel_case(Input) ->
+    case is_camel_cased(to_string(Input)) of
+        true -> 0;
+        _ ->  1
+    end.
+
+is_camel_cased([$_|_]) ->
+    true;
+is_camel_cased(String) when length(String) > 3 ->
+    HasUpperCase = string:to_lower(String) /= String,
+    HasLowerCase = string:to_upper(String) /= String,
+    HasUnderscore = lists:member($_, String),
+    HasUpperCase andalso HasLowerCase andalso not HasUnderscore;
+is_camel_cased(_) ->
+    true.
+
+is_leaf({function, _, _}) -> true;
+is_leaf({function, _, _, _}) -> true;
+is_leaf({nil, _}) -> true;
+is_leaf({atom, _, _}) -> true;
+is_leaf({var, _, _}) -> true;
+is_leaf({string, _, _}) -> true;
+is_leaf({integer, _, _}) -> true;
+is_leaf({float, _, _}) -> true;
+is_leaf({char, _, _}) -> true;
+is_leaf(_) -> false.
 
 
 %%-----------------------
 %% Utilities
+
+make_name({function, _, Name, Arity, _}) ->
+    list_to_atom(lists:flatten(io_lib:format("~p|~p",[Name, Arity]))).
+
+to_string(X) when is_atom(X) -> atom_to_list(X);
+to_string(X) when is_list(X) -> X.
+
 
 usort(L) -> lists:usort(L).
 
