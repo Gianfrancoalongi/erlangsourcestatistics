@@ -68,9 +68,6 @@ default_metrics() ->
      {complexity, {2, 6}},
      {line_lengths, {75, 120}}].
 
-get_limit_for_metric(Metric) ->
-    gv(Metric, default_metrics()).
-
 find_file_opts(LineOpts) ->
     HomeDir = get_home_dir(),
     LineOptionDir = gv(conf_dir, LineOpts),

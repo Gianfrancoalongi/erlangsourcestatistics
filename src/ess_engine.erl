@@ -354,8 +354,10 @@ analyze_function(AST={function, _, _Name, _, _}) ->
                         {variable_steppings, variable_steppings_per_function(AST)}
                        ]}.
 
+
 function_naming({function, _, Name, _, _Clauses}, _FromMatch) ->
     snake_case(Name).
+
 
 variable_naming({function, _, _Name, _, Clauses}, FromMatch) ->
     variable_naming(Clauses, FromMatch);
@@ -365,9 +367,9 @@ variable_naming({clause, _, Match, Guards, Exprs}, FromMatch) ->
     sum([variable_naming(Match, true),
          variable_naming(Guards, FromMatch),
          variable_naming(Exprs, FromMatch)]);
-variable_naming({match,_,LHS, _RHS}, FromMatch) ->
+variable_naming({match, _,LHS, RHS}, FromMatch) ->
     sum(variable_naming(LHS, true),
-        variable_naming(LHS, FromMatch));
+        variable_naming(RHS, FromMatch));
 variable_naming({call,_, _, Args}, FromMatch) ->
     variable_naming(Args, FromMatch);
 variable_naming({bin,_, Elems}, FromMatch) ->
@@ -596,94 +598,43 @@ is_ascii_integer(X) when (X>=$0), (X=<$9) -> true;
 is_ascii_integer(_) -> false.
 
 complexity(AST) ->
-    FromMatchLHS = false,
-    complexity(AST, FromMatchLHS).
+    NodeF = fun complexity_node/2,
+    Gen  = fun complexity_gen/2,
+    History = #hist{},
+    dbg:tracer(),
+    dbg:p(all,[c]),
+%%    dbg:tpl(ess_ast, x),
+    dbg:tpl(ess_engine, complexity_gen, x),
+    dbg:tpl(ess_engine, complexity_node, x),
+    ess_ast:traverse(AST, NodeF, Gen, History).
 
-complexity(L, FromMatchLHS) when is_list(L) ->
-    max([ complexity(X, FromMatchLHS) || X <- L ]);
-complexity({function, _, _, _, Clauses}, FromMatchLHS) ->
-    max([ complexity(X, FromMatchLHS) || X <- Clauses ]);
-complexity({clause, _, Match, Guards, Exprs}, FromMatchLHS) ->
-    max([complexity(Match, FromMatchLHS),
-         complexity(Guards, FromMatchLHS),
-         complexity(Exprs, FromMatchLHS)]);
-complexity({match, _, LHS, RHS}, FromMatchLHS) ->
-    max(complexity(LHS, true) , complexity(RHS, FromMatchLHS));
-complexity({call, _, _, Args}, FromMatchLHS) ->
-    1+complexity(Args, FromMatchLHS);
-complexity({bin, _, Elems}, FromMatchLHS) ->
-    1+complexity(Elems, FromMatchLHS);
-complexity({bin_element, _, Elem, _, _}, FromMatchLHS) ->
-    complexity(Elem, FromMatchLHS);
-complexity({'case', _, Expr, Clauses}, FromMatchLHS) ->
-    max(complexity(Expr, FromMatchLHS), complexity(Clauses, FromMatchLHS));
-complexity({'if', _, Clauses}, FromMatchLHS) ->
-    complexity(Clauses, FromMatchLHS);
-complexity({'receive', _, Clauses}, FromMatchLHS) ->
-    complexity(Clauses, FromMatchLHS);
-complexity({'receive', _, Clauses, _, AfterExprs}, FromMatchLHS) ->
-    max(complexity(Clauses, FromMatchLHS), 
-        complexity(AfterExprs, FromMatchLHS));
-complexity({cons,_,Hd, Tl}, FromMatchLHS) ->
-    max(complexity(Hd, FromMatchLHS), 
-        complexity(Tl, FromMatchLHS));
-complexity({record, _, _, Fields}, FromMatchLHS) ->
-    1+complexity(Fields, FromMatchLHS);
-complexity({record, _, Var, _, RecordField}, FromMatchLHS) ->
-    1+max(complexity(Var, FromMatchLHS), 
-          complexity(RecordField, FromMatchLHS));
-complexity({record_field, _, _, Expr}, FromMatchLHS) ->
-    complexity(Expr, FromMatchLHS);
-complexity({record_field, _, Expr1, _, Expr2}, FromMatchLHS) ->
-    1 + (1+complexity(Expr1, FromMatchLHS)) 
-        + complexity(Expr2, FromMatchLHS);
-complexity({record_index, _, _, Expr}, FromMatchLHS) ->
-    1+complexity(Expr, FromMatchLHS);
-complexity({tuple, _, Elements}, FromMatchLHS) ->
+complexity_node(Val, Chs) -> Val + max(Chs).
+
+complexity_gen({record_field, _, _, _, _}, _) ->
+    2;
+complexity_gen({tuple, _, Elements}, H) ->
+    FromMatchLHS = H#hist.lhs > 0,
     case FromMatchLHS andalso (length(Elements) > 2) of
         true ->
-            length(Elements) + complexity(Elements, FromMatchLHS);
+            length(Elements);
         false ->
-            1 + complexity(Elements, FromMatchLHS)
+            1
     end;
-complexity({op, _, _, LHS, RHS}, FromMatchLHS) ->
-    1+ max(complexity(LHS, FromMatchLHS), 
-           complexity(RHS, FromMatchLHS));
-complexity({op, _, _, Expr}, FromMatchLHS) ->
-    1+complexity(Expr, FromMatchLHS);
-complexity({lc, _, Body, Generator}, FromMatchLHS) ->
-    1+ max(complexity(Body, FromMatchLHS), 
-           complexity(Generator, FromMatchLHS));
-complexity({generate, _, Expr, Guards}, FromMatchLHS) ->
-    max(complexity(Expr, FromMatchLHS), 
-        complexity(Guards, FromMatchLHS));
-complexity({b_generate, _, Expr, Guards}, FromMatchLHS) ->
-    max(complexity(Expr, FromMatchLHS), 
-        complexity(Guards, FromMatchLHS));
-complexity({'catch', _, CallExpr}, FromMatchLHS) ->
-    1+complexity(CallExpr, FromMatchLHS);
-complexity({'fun', _, Expr}, FromMatchLHS) ->
-    1+complexity(Expr, FromMatchLHS);
-complexity({clauses, Clauses}, FromMatchLHS) ->
-    complexity(Clauses, FromMatchLHS);
-complexity({'try', _, CallExprs, _, Exprs, _}, FromMatchLHS)->
-    1+ max(complexity(CallExprs, FromMatchLHS), 
-           complexity(Exprs, FromMatchLHS));
-complexity({block, _, CallExprs}, FromMatchLHS) ->
-    1+complexity(CallExprs, FromMatchLHS);
-complexity({bc, _, Body, Generator}, FromMatchLHS) ->
-    1+ max(complexity(Body, FromMatchLHS), 
-           complexity(Generator, FromMatchLHS));
+complexity_gen(AST, _) ->
+    case is_complexity_plus_one(AST) of
+        true -> 1;
+        _ -> 0
+    end.
 
-complexity({function, _, _}, _FromMatchLHS) -> 0;
-complexity({function, _, _, _}, _FromMatchLHS) -> 0;
-complexity({nil, _}, _FromMatchLHS) -> 0;
-complexity({atom, _, _}, _FromMatchLHS) -> 0;
-complexity({var, _, _}, _FromMatchLHS) -> 0;
-complexity({string, _, _}, _FromMatchLHS) -> 0;
-complexity({integer, _, _}, _FromMatchLHS) -> 0;
-complexity({float, _, _}, _FromMatchLHS) -> 0;
-complexity({char, _, _}, _FromMatchLHS) -> 0.
+-define(COMPLEXITY_PLUS_ONE_TYPE_LIST, 
+        [call, bin, record, record_field, record_index, op, lc,
+         'catch', 'fun', 'try', block, bc, call, bin]).
+
+is_complexity_plus_one(AST) when is_tuple(AST) ->
+    is_complexity_plus_one(element(1, AST));
+is_complexity_plus_one(Type) ->
+    lists:member(Type, ?COMPLEXITY_PLUS_ONE_TYPE_LIST).
+
 
 %% --------------------------------------------------
 
