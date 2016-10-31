@@ -2,56 +2,56 @@
 -include("ess.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
-function_names_shall_be_snaked_cased_testX() ->
+function_names_shall_be_snaked_cased_test() ->
     Code = ["snake_cased() -> ok."],
     Penalty = run_tc(function_naming, Code),
     ?assertEqual(0, Penalty).
 
-bad_function_name_testX() ->
+bad_function_name_test() ->
     Code = ["camelCased1() -> ok."],
     Penalty = run_tc(function_naming, Code),
     ?assertEqual(10, Penalty).
 
-same_bad_function_name_is_counted_only_once_testX() ->
+same_bad_function_name_is_counted_only_once_test() ->
     Code = ["camelCased1() -> ok;",
             "camelCased1() -> ok."],
     Penalty = run_tc(function_naming, Code),
     ?assertEqual(10, Penalty).
 
-bad_function_names_for_different_functions_testX() ->
+bad_function_names_for_different_functions_test() ->
     Code = ["camelCased1() -> ok.",
             "camelCased2() -> ok."],
     Penalty = run_tc(function_naming, Code),
     ?assertEqual(20, Penalty).
 
-variables_shall_be_camel_cased_testX() ->
+variables_shall_be_camel_cased_test() ->
     Code = ["f(CamelCase) -> CamelCase."],
     Penalty = run_tc(variable_naming, Code),
     ?assertEqual(0, Penalty).
 
-more_than_one_bad_variable_names_in_same_function_clause_is_bad_testX() ->
+more_than_one_bad_variable_names_in_same_function_clause_is_bad_test() ->
     Code = ["f(S_1_b, S_2_b) -> "
             "   S_1_b + S_2_b."],
     Penalty = run_tc(variable_naming, Code),
     ?assertEqual(3, Penalty).
 
-more_than_one_bad_variable_names_in_different_function_clauses_is_bad_testX() ->
+more_than_one_bad_variable_names_in_different_function_clauses_is_bad_test() ->
     Code = ["f(S_1_b) -> S_1_b;"
             "f(S_2_b) -> S_2_b."],
     Penalty = run_tc(variable_naming, Code),
     ?assertEqual(3, Penalty).
 
-function_arity_shall_be_less_than_or_equal_to_three_testX() ->
+function_arity_shall_be_less_than_or_equal_to_three_test() ->
     Code = ["f(A,B,C) -> ok."],
     Penalty = run_tc(arity, Code),
     ?assertEqual(0, Penalty).
 
-functions_with_arity_more_than_three_is_bad_testX() ->
+functions_with_arity_more_than_three_is_bad_test() ->
     Code = ["f(A,B,C,D) -> ok."],
     Penalty = run_tc(arity, Code),
     ?assertEqual(2, Penalty).
 
-functions_may_have_up_to_four_clauses_testX() ->
+functions_may_have_up_to_four_clauses_test() ->
     Code = ["f() -> ok;",
             "f() -> ok;",
             "f() -> ok;",
@@ -59,7 +59,7 @@ functions_may_have_up_to_four_clauses_testX() ->
     Penalty = run_tc(clauses, Code),
     ?assertEqual(0, Penalty).
 
-more_than_four_clauses_is_bad_testX() ->
+more_than_four_clauses_is_bad_test() ->
     Code = ["f(a) -> ok;",
             "f(b) -> ok;",
             "f(c) -> ok;",
@@ -68,7 +68,7 @@ more_than_four_clauses_is_bad_testX() ->
     Penalty = run_tc(clauses, Code),
     ?assertEqual(2, Penalty).
 
-up_to_20_expressions_in_a_function_is_okay_testX() ->
+up_to_20_expressions_in_a_function_is_okay_test() ->
     Code = ["f() ->",
             "A = 1,",
             "B = 2,",
@@ -93,7 +93,7 @@ up_to_20_expressions_in_a_function_is_okay_testX() ->
     Penalty = run_tc(expressions_per_function, Code),
     ?assertEqual(0, Penalty).
 
-more_than_20_expressions_in_a_function_is_bad_testX() ->
+more_than_20_expressions_in_a_function_is_bad_test() ->
     Code = ["f() ->",
             "A = 1,",
             "B = 2,",
@@ -120,14 +120,14 @@ more_than_20_expressions_in_a_function_is_bad_testX() ->
     Penalty = run_tc(expressions_per_function, Code),
     ?assertEqual(1, Penalty).
 
-one_variable_stepping_is_ok_testX() ->
+one_variable_stepping_is_ok_test() ->
     Code = ["f() ->",
             "A = 1,",
             "A1 = A+1."],
     Penalty = run_tc(variable_steppings, Code),
     ?assertEqual(0, Penalty).
 
-variable_stepping_syntax_bases_on_new_testX() ->
+variable_stepping_syntax_bases_on_new_test() ->
     Code = ["f() ->",
             "A = 1,",
             "NewA = A+1,",
@@ -136,7 +136,7 @@ variable_stepping_syntax_bases_on_new_testX() ->
     Penalty = run_tc(variable_steppings, Code),
     ?assertEqual(3, Penalty).
 
-variable_stepping_syntax_bases_on_int_testX() ->
+variable_stepping_syntax_bases_on_int_test() ->
     Code = ["f() ->",
             "A = 1,",
             "A1 = A+1,",
@@ -144,24 +144,24 @@ variable_stepping_syntax_bases_on_int_testX() ->
     Penalty = run_tc(variable_steppings, Code),
     ?assertEqual(3, Penalty).
 
-variable_stepping_syntax_bases_on_new_old_testX() ->
+variable_stepping_syntax_bases_on_new_old_test() ->
     Code = ["f(OldA) ->",
             "A = OldA+1,",
             "NewA = A+1."],
     Penalty = run_tc(variable_steppings, Code),
     ?assertEqual(3, Penalty).
     
-export_all_is_penalized_testX() ->
+export_all_is_penalized_test() ->
     Code = ["-compile(export_all)."],
     Penalty = run_tc(export_all, Code),
     ?assertEqual(10, Penalty).
 
-up_to_three_missing_space_after_comma_is_ok_testX() ->
+up_to_three_missing_space_after_comma_is_ok_test() ->
     Code = ["f(A,B,C,D) -> ok."],
     Penalty = run_tc(space_after_comma, Code),
     ?assertEqual(0, Penalty).
 
-beyond_three_missing_space_after_comma_testX_() ->
+beyond_three_missing_space_after_comma_test_() ->
     [{"Function head", 
       fun() ->
               Code = ["f(A,B,C,D,E) -> ok."],
@@ -194,18 +194,18 @@ beyond_three_missing_space_after_comma_testX_() ->
       end}
     ].
 
-no_compiler_warnings_is_ok_testX() ->
+no_compiler_warnings_is_ok_test() ->
     Code = ["f(A) -> A."],
     Penalty = run_tc(warnings, Code),
     ?assertEqual(0, Penalty).
 
-compiler_warnings_testX() ->
+compiler_warnings_test() ->
     Code = ["f(A) -> ok."],
     Penalty = run_tc(warnings, Code),
     ?assertEqual(10, Penalty).
 
 
-nested_clauses_testX_() ->
+nested_clauses_test_() ->
     [{"cases",
       fun() ->
               Code = ["
@@ -294,7 +294,7 @@ nested_clauses_testX_() ->
       end}
     ].
 
-complexity_testX_() ->
+complexity_test_() ->
     [
      {"tuple as function argument",
       fun() ->
@@ -436,19 +436,6 @@ complexity_testX_() ->
       end}
     ].
       
-
-d_complexity_test_() ->
-    [
-     {"record within record",
-      fun() ->
-              Code = ["-record(r1,{a}).",
-                      "-record(r2,{}).",
-                      "f() -> #r1{a = #r2{}}."],
-              Penalty = run_tc(complexity, Code),
-              ?assertEqual(0, Penalty)
-      end}
-    ].
-
 
 %% ---------------------------------------------------------------------------
 run_tc(Metric, CodeSnippet) ->

@@ -597,18 +597,19 @@ is_all_integers(L) ->
 is_ascii_integer(X) when (X>=$0), (X=<$9) -> true;
 is_ascii_integer(_) -> false.
 
+    %% dbg:tracer(),
+    %% dbg:p(all,[c]),
+    %% dbg:tpl(ess_engine, complexity_gen, x),
+    %% dbg:tpl(ess_engine, complexity_node, x),
+
 complexity(AST) ->
     NodeF = fun complexity_node/2,
     Gen  = fun complexity_gen/2,
     History = #hist{},
-    dbg:tracer(),
-    dbg:p(all,[c]),
-%%    dbg:tpl(ess_ast, x),
-    dbg:tpl(ess_engine, complexity_gen, x),
-    dbg:tpl(ess_engine, complexity_node, x),
     ess_ast:traverse(AST, NodeF, Gen, History).
 
-complexity_node(Val, Chs) -> Val + max(Chs).
+complexity_node(Val, Chs) -> 
+    Val + max(Chs).
 
 complexity_gen({record_field, _, _, _, _}, _) ->
     2;
@@ -627,7 +628,7 @@ complexity_gen(AST, _) ->
     end.
 
 -define(COMPLEXITY_PLUS_ONE_TYPE_LIST, 
-        [call, bin, record, record_field, record_index, op, lc,
+        [call, bin, record, record_index, op, lc,
          'catch', 'fun', 'try', block, bc, call, bin]).
 
 is_complexity_plus_one(AST) when is_tuple(AST) ->
