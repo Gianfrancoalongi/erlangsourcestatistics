@@ -16,7 +16,7 @@
 
 
 -record(hist,{base_element = 0,
-              in_block = false,
+              in_block,
               'case' = 0,
               'match' = 0,
               'lhs' = 0,

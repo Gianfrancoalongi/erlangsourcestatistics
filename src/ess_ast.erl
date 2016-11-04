@@ -1,12 +1,13 @@
 -module(ess_ast).
--export([traverse/4]).
+-include("ess.hrl").
 
+-export([traverse/4]).
 -export([has_expression_children/1]).
 -export([expression_children/1]).
 
--include("ess.hrl").
 
-traverse(AST = {function, _, _, _, Clauses}, NodeF, Gen, Hist) ->
+
+traverse(AST = {function, _, Name, _, Clauses}, NodeF, Gen, Hist) ->
     NewHist = set_hist(AST, Hist),
     NodeF(Gen(AST, NewHist), 
           [ traverse(X, NodeF, Gen, NewHist) || X <- Clauses ]);
@@ -187,7 +188,7 @@ traverse(AST = {float, _, _}, _, Gen, Hist) -> Gen(AST, Hist);
 traverse(AST = {char, _, _},  _, Gen, Hist) -> Gen(AST, Hist).
 
 
--define(HAS_EXPR_CHILDREN, ['clause', 'block', 'fun', 'try']).
+-define(HAS_EXPR_CHILDREN, ['clause', 'block', 'try']).
 
 has_expression_children(AST) ->
     lists:member(ast_type(AST), ?HAS_EXPR_CHILDREN).
