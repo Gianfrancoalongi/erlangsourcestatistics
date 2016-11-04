@@ -8,10 +8,6 @@
 quality(T = #tree{type=function}, Opts) ->
     RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV, Opts),
-
-    io:format("  RV-function:~p~n",[RV]),
-    io:format("QP-function:~p~n",[QP]),
-
     T#tree{quality_penalty = QP,
            quality = 100 - lists:sum([V||{_,V}<-QP])
           };
@@ -22,10 +18,6 @@ quality(T = #tree{type=file}, Opts) ->
     RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV, Opts),
     QP2 = key_sum(QP ++ CQP),
-
-    io:format("  RV-file:~p~n",[RV]),
-    io:format("QP-file:~p~n",[QP2]),
-
     T#tree{children = CS2,
            quality_penalty = QP2,
            quality = 100 - lists:sum([V||{_,V}<-QP2])
@@ -34,9 +26,6 @@ quality(T = #tree{type=dir}, Opts) ->
     CS = T#tree.children,
     CS2 = [ quality(C, Opts) || C <- CS],
     CQP = lists:flatten([ C#tree.quality_penalty || C <- CS2 ]),
-
-%%    io:format("QP-dir:~p~n",[CQP]),
-
     T#tree{children = CS2,
            quality_penalty = key_sum(CQP),
            quality = 100 - lists:sum([V||{_,V}<-CQP])
@@ -386,18 +375,35 @@ warning_metric(Warnings) ->
     {warnings, length(Warnings)}.
 
 %% --------------------------------------------------
-expressions_per_function_line({function, _, _, _, Clauses}) ->
-    LNs = [ get_toplevel_linenumbers(C) || C <- Clauses],
-    ROSL = repeats_on_same_line(lists:flatten(LNs)),
-    calc_avg(#val{max=lists:max(ROSL),
-                  min=lists:min(ROSL),
-                  sum=sum(ROSL),
-                  n=length(ROSL)}).
+expressions_per_function_line(AST) ->
+    expressions_per_line(AST).
 
-calc_avg(V=#val{n=0}) ->
-    V#val{avg = 0};
-calc_avg(V=#val{n=N, sum=Sum}) ->
-    V#val{avg = round(Sum / N)}.
+expressions_per_line(AST) ->
+    NodeF = fun expressions_per_line_node/2,
+    Gen  = fun expressions_per_line_gen/2,
+    History = #hist{base_element = 0},
+    ess_ast:traverse(AST, NodeF, Gen, History).
+
+expressions_per_line_node(Val, Chs) ->
+    sum([Val|Chs]).
+
+expressions_per_line_gen({'case', L , _, Clauses}, _) ->
+    CL = [ element(2,E) || {clause, _, _, _, Exprs} <- Clauses, E <- Exprs ],
+    Lines = [L | CL],
+    UL = lists:usort(Lines),
+    length(Lines) - length(UL);
+expressions_per_line_gen(AST, _) ->
+    case ess_ast:has_expression_children(AST) of
+        true -> 
+            count_overlapping_lines(ess_ast:expression_children(AST));
+        false ->
+            0
+    end.
+
+count_overlapping_lines(Cs) ->        
+    Lines = [ element(2, C) || C <- Cs ],
+    UL = lists:usort(Lines),
+    length(Lines) - length(UL).
 
 %% --------------------------------------------------
 lines_per_function(AST) ->
@@ -552,20 +558,8 @@ get_clause_depth(#hist{'case' = C,
     C + T + I + R + B.
 
 %% ------------------------------------------------------------
-repeats_on_same_line(LNs) ->
-    repeats_on_same_line(LNs,hd(LNs),0).
 
-repeats_on_same_line([N|R],N,Counted) ->
-    repeats_on_same_line(R,N,Counted+1);
-repeats_on_same_line([N|R],_,Counted) ->
-    [ Counted | repeats_on_same_line(R,N,1) ];
-repeats_on_same_line([],_,Counted) ->
-    [ Counted ].
-
-
-get_toplevel_linenumbers({clause,_Line,_,_,Expressions}) ->
-    [element(2,L) || L <- Expressions].
-
+%% ================================================================================
 
 get_linenumbers({function,_Line,_,_,Clauses}) ->
     [ get_linenumbers(C) || C <- Clauses ];
@@ -573,7 +567,7 @@ get_linenumbers({clause,_Line,_,_,Expressions}) ->
     get_linenumbers_body(Expressions).
 
 get_linenumbers_body([]) ->
-    [2];
+    [];
 get_linenumbers_body([{match,L,LHS,RHS}|R]) ->
     RHSLines = get_linenumbers_body([RHS]),
     LHSLines = get_linenumbers_body([LHS]),
@@ -608,6 +602,7 @@ get_linenumbers_body([{Marker,LN,_,_}|T]) when is_atom(Marker) ->
     [LN|get_linenumbers_body(T)];
 get_linenumbers_body([{Marker,LN,_,_,_}|T]) when is_atom(Marker) ->
     [LN|get_linenumbers_body(T)].
+
 
 snake_case(Input) ->
     case is_snake_cased(to_string(Input)) of
@@ -674,7 +669,6 @@ to_string(X) when is_list(X) -> X.
 
 usort(L) -> lists:usort(L).
 
-%%sum(A, B) -> A+B.
 sum(L) -> lists:sum(L).
 
 max([]) -> 0;

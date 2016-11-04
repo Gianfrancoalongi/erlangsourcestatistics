@@ -15,7 +15,9 @@
 -record(val, {max, min, avg, sum, n}).
 
 
--record(hist,{'case' = 0,
+-record(hist,{base_element = 0,
+              in_block = false,
+              'case' = 0,
               'match' = 0,
               'lhs' = 0,
               'rhs' = 0,

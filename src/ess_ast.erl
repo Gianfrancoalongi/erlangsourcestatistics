@@ -1,6 +1,9 @@
 -module(ess_ast).
 -export([traverse/4]).
 
+-export([has_expression_children/1]).
+-export([expression_children/1]).
+
 -include("ess.hrl").
 
 traverse(AST = {function, _, _, _, Clauses}, NodeF, Gen, Hist) ->
@@ -8,14 +11,15 @@ traverse(AST = {function, _, _, _, Clauses}, NodeF, Gen, Hist) ->
     NodeF(Gen(AST, NewHist), 
           [ traverse(X, NodeF, Gen, NewHist) || X <- Clauses ]);
 traverse(L, NodeF, Gen, Hist) when is_list(L) ->
-    NodeF(0, [ traverse(X, NodeF, Gen, Hist) || X <- L ]);
+    NodeF(Hist#hist.base_element, 
+          [ traverse(X, NodeF, Gen, Hist) || X <- L ]);
 traverse(AST = {'case', _, Expr, Clauses}, NodeF, Gen, Hist) ->
     NewHist = set_hist(AST, Hist),
     NodeF(Gen(AST, NewHist),
           [traverse(Expr, NodeF, Gen, NewHist),
            traverse(Clauses, NodeF, Gen, NewHist)]);
 traverse(AST = {match, _, LHS, RHS}, NodeF, Gen, Hist) ->
-    NewHist = set_hist(match, Hist),
+    NewHist = set_hist(AST, Hist),
     HistLHS = set_hist(lhs, NewHist),
     HistRHS = set_hist(rhs, NewHist),
     NodeF(Gen(AST, NewHist),
@@ -183,9 +187,29 @@ traverse(AST = {float, _, _}, _, Gen, Hist) -> Gen(AST, Hist);
 traverse(AST = {char, _, _},  _, Gen, Hist) -> Gen(AST, Hist).
 
 
+-define(HAS_EXPR_CHILDREN, ['clause', 'block', 'fun', 'try']).
 
+has_expression_children(AST) ->
+    lists:member(ast_type(AST), ?HAS_EXPR_CHILDREN).
+
+ast_type(AST) ->
+    element(1, AST).
+
+expression_children({clause, _, _, _, Exprs}) ->
+    Exprs;
+expression_children({'try', _, CallExprs, Clauses, CatchClauses, _}) ->
+    CallExprs ++ Clauses ++ CatchClauses;
+expression_children({'fun', _, Expr}) ->
+    Expr;
+expression_children({block, _, CallExprs}) ->
+    CallExprs;
+expression_children(_) ->
+    [].
+
+    
 set_hist(AST, H) when is_tuple(AST) ->
-    set_hist(element(1, AST), H);
+    Type = ast_type(AST),
+    set_hist(Type, H);
 set_hist('case', H=#hist{'case'=C}) -> H#hist{'case'=C+1};
 set_hist('match', H=#hist{'match'=C}) -> H#hist{'match'=C+1};
 set_hist('lhs', H=#hist{lhs=C}) -> H#hist{lhs=C+1};
