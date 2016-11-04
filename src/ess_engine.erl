@@ -8,10 +8,6 @@
 quality(T = #tree{type=function}, Opts) ->
     RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV, Opts),
-
-    io:format("  RV-function:~p~n",[RV]),
-    io:format("QP-function:~p~n",[QP]),
-
     T#tree{quality_penalty = QP,
            quality = 100 - lists:sum([V||{_,V}<-QP])
           };
@@ -22,10 +18,6 @@ quality(T = #tree{type=file}, Opts) ->
     RV = T#tree.raw_values,
     QP = calculate_quality_penalty(RV, Opts),
     QP2 = key_sum(QP ++ CQP),
-
-    io:format("  RV-file:~p~n",[RV]),
-    io:format("QP-file:~p~n",[QP2]),
-
     T#tree{children = CS2,
            quality_penalty = QP2,
            quality = 100 - lists:sum([V||{_,V}<-QP2])
@@ -34,9 +26,6 @@ quality(T = #tree{type=dir}, Opts) ->
     CS = T#tree.children,
     CS2 = [ quality(C, Opts) || C <- CS],
     CQP = lists:flatten([ C#tree.quality_penalty || C <- CS2 ]),
-
-%%    io:format("QP-dir:~p~n",[CQP]),
-
     T#tree{children = CS2,
            quality_penalty = key_sum(CQP),
            quality = 100 - lists:sum([V||{_,V}<-CQP])
@@ -344,7 +333,7 @@ analyze_function(AST={function, _, _Name, _, _}) ->
     #tree{type = function,
           name = make_name(AST),
           raw_values = [{function_naming, function_naming(AST, false)},
-                        {variable_naming, variable_naming(AST, false)},
+                        {variable_naming, variable_naming(AST)},
                         {nested_clauses, nested_clauses(AST)},
                         {complexity, complexity(AST)},
                         {expressions_per_function, lines_per_function(AST)},
@@ -354,158 +343,69 @@ analyze_function(AST={function, _, _Name, _, _}) ->
                         {variable_steppings, variable_steppings_per_function(AST)}
                        ]}.
 
+
+%% --------------------------------------------------
 function_naming({function, _, Name, _, _Clauses}, _FromMatch) ->
     snake_case(Name).
 
-variable_naming({function, _, _Name, _, Clauses}, FromMatch) ->
-    variable_naming(Clauses, FromMatch);
-variable_naming(L, FromMatch) when is_list(L) ->
-    sum([variable_naming(X, FromMatch) || X <- L]);
-variable_naming({clause, _, Match, Guards, Exprs}, FromMatch) ->
-    sum([variable_naming(Match, true),
-         variable_naming(Guards, FromMatch),
-         variable_naming(Exprs, FromMatch)]);
-variable_naming({match,_,LHS, _RHS}, FromMatch) ->
-    sum(variable_naming(LHS, true),
-        variable_naming(LHS, FromMatch));
-variable_naming({call,_, _, Args}, FromMatch) ->
-    variable_naming(Args, FromMatch);
-variable_naming({bin,_, Elems}, FromMatch) ->
-    variable_naming(Elems, FromMatch);
-variable_naming({bin_element,_, Elem, _, _}, FromMatch) ->
-    variable_naming(Elem, FromMatch);
-variable_naming({'case',_, Expr, Clauses}, FromMatch) ->
-    sum(variable_naming(Expr, FromMatch),
-        variable_naming(Clauses, FromMatch));
-variable_naming({'if',_, Clauses}, FromMatch) ->
-    variable_naming(Clauses, FromMatch);
-variable_naming({'receive',_,Clauses}, FromMatch) ->
-    variable_naming(Clauses, FromMatch);
-variable_naming({'receive',_,Clauses, _, AfterExprs}, FromMatch) ->
-    sum(variable_naming(Clauses, FromMatch),
-        variable_naming(AfterExprs, FromMatch));
-variable_naming({cons,_,Hd, Tl}, FromMatch) ->
-    sum(variable_naming(Hd, FromMatch) ,
-        variable_naming(Tl, FromMatch));
-variable_naming({record,_,_,Fields}, FromMatch) ->
-    variable_naming(Fields, FromMatch);
-variable_naming({record,_,Var,_,RecordField}, FromMatch) ->
-    sum(variable_naming(Var, FromMatch),
-        variable_naming(RecordField, FromMatch));
-variable_naming({record_field,_,_,Expr}, FromMatch) ->
-    variable_naming(Expr, FromMatch);
-variable_naming({record_field,_,Expr1,_,Expr2}, FromMatch) ->
-    sum(variable_naming(Expr1, FromMatch),
-        variable_naming(Expr2, FromMatch));
-variable_naming({record_index,_,_, Expr}, FromMatch) ->
-    variable_naming(Expr, FromMatch);
-variable_naming({tuple,_,Elements}, FromMatch) ->
-    variable_naming(Elements, FromMatch);
-variable_naming({op,_,_,LHS,RHS}, FromMatch) ->
-    sum(variable_naming(LHS, FromMatch),
-        variable_naming(RHS, FromMatch));
-variable_naming({op,_,_,Expr}, FromMatch) ->
-    variable_naming(Expr, FromMatch);
-variable_naming({lc,_,Body,Generator}, FromMatch) ->
-    sum(variable_naming(Body, FromMatch),
-        variable_naming(Generator, FromMatch));
-variable_naming({generate,_,Expr,Guards}, FromMatch) ->
-    sum(variable_naming(Expr, FromMatch),
-        variable_naming(Guards, FromMatch));
-variable_naming({b_generate,_,Expr,Guards}, FromMatch) ->
-    sum(variable_naming(Expr, FromMatch),
-        variable_naming(Guards, FromMatch));
-variable_naming({'catch',_,CallExpr}, FromMatch) ->
-    variable_naming(CallExpr, FromMatch);
-variable_naming({'fun',_,Expr}, FromMatch) ->
-    variable_naming(Expr, FromMatch);
-variable_naming({clauses,Clauses}, FromMatch) ->
-    variable_naming(Clauses, FromMatch);
-variable_naming({'try',_,CallExprs,_,Exprs,_}, FromMatch)->
-    sum(variable_naming(CallExprs, FromMatch),
-        variable_naming(Exprs, FromMatch));
-variable_naming({block, _, CallExprs}, FromMatch) ->
-    variable_naming(CallExprs, FromMatch);
-variable_naming({bc,_,Body,Generator}, FromMatch) ->
-    sum(variable_naming(Body, FromMatch),
-        variable_naming(Generator, FromMatch));
+%% --------------------------------------------------
+variable_naming(AST) ->
+    NodeF = fun variable_naming_node/2,
+    Gen  = fun variable_naming_gen/2,
+    History = #hist{},
+    ess_ast:traverse(AST, NodeF, Gen, History).
 
-variable_naming({var,_,V}, true) -> camel_case(V);
-variable_naming({atom,_,A}, _) -> snake_case(A);
+variable_naming_node(Value, Chs) ->
+    Value + sum(Chs).
 
-variable_naming({function,_,_}, _) -> 0;
-variable_naming({function,_,_,_}, _) -> 0;
-variable_naming({nil,_}, _) -> 0;
-variable_naming({var,_,_}, _) -> 0;
-variable_naming({string,_,_}, _) -> 0;
-variable_naming({integer,_,_}, _) -> 0;
-variable_naming({float,_,_}, _) -> 0;
-variable_naming({char,_,_}, _) -> 0.
+variable_naming_gen({var, _, V}, H) ->
+    case H#hist.match > 0 of
+        true ->
+            camel_case(V);
+        false ->
+            0
+    end;
+variable_naming_gen({atom, _, A}, _) ->
+    snake_case(A);
+variable_naming_gen(_, _) ->
+    0.
 
-
-snake_case(Input) ->
-    case is_snake_cased(to_string(Input)) of
-        true -> 0;
-        _ -> 1
-    end.
-
-is_snake_cased(String) ->
-    OnlyLowerCase = string:to_lower(String) == String,
-    HasUnderscore = lists:member($_, String),
-    IMN = is_module_name(String),
-    OnlyLowerCase or HasUnderscore or IMN.
-
-is_module_name(String) ->
-    index_of_first_uppercase(String) =< 4.
-
-index_of_first_uppercase(S) ->
-    index_of_first_uppercase(1, S).
-
-index_of_first_uppercase(_, []) ->
-    0;
-index_of_first_uppercase(Ix, [C|_]) when C =< $Z, C >= $A ->
-    Ix;
-index_of_first_uppercase(Ix, [_|Cs]) ->
-    index_of_first_uppercase(Ix+1, Cs).
-
-camel_case(Input) ->
-    case is_camel_cased(to_string(Input)) of
-        true -> 0;
-        _ ->  1
-    end.
-
-is_camel_cased([$_|_]) ->
-    true;
-is_camel_cased(String) when length(String) > 3 ->
-    HasUpperCase = string:to_lower(String) /= String,
-    HasLowerCase = string:to_upper(String) /= String,
-    HasUnderscore = lists:member($_, String),
-    HasUpperCase andalso HasLowerCase andalso not HasUnderscore;
-is_camel_cased(_) ->
-    true.
-
-to_string(X) when is_atom(X) -> atom_to_list(X);
-to_string(X) when is_list(X) -> X.
-
-make_name({function, _, Name, Arity, _}) ->
-    list_to_atom(lists:flatten(io_lib:format("~p|~p",[Name, Arity]))).
-
+%% --------------------------------------------------
 warning_metric(Warnings) ->
     {warnings, length(Warnings)}.
 
-expressions_per_function_line({function,_,_,_,Clauses}) ->
-    LNs = [ get_toplevel_linenumbers(C) || C <- Clauses],
-    ROSL = repeats_on_same_line(lists:flatten(LNs)),
-    calc_avg(#val{max=lists:max(ROSL),
-                  min=lists:min(ROSL),
-                  sum=sum(ROSL),
-                  n=length(ROSL)}).
+%% --------------------------------------------------
+expressions_per_function_line(AST) ->
+    expressions_per_line(AST).
 
-calc_avg(V=#val{n=0}) ->
-    V#val{avg = 0};
-calc_avg(V=#val{n=N, sum=Sum}) ->
-    V#val{avg = round(Sum / N)}.
+expressions_per_line(AST) ->
+    NodeF = fun expressions_per_line_node/2,
+    Gen  = fun expressions_per_line_gen/2,
+    History = #hist{base_element = 0},
+    ess_ast:traverse(AST, NodeF, Gen, History).
 
+expressions_per_line_node(Val, Chs) ->
+    sum([Val|Chs]).
+
+expressions_per_line_gen({'case', L , _, Clauses}, _) ->
+    CL = [ element(2,E) || {clause, _, _, _, Exprs} <- Clauses, E <- Exprs ],
+    Lines = [L | CL],
+    UL = lists:usort(Lines),
+    length(Lines) - length(UL);
+expressions_per_line_gen(AST, _) ->
+    case ess_ast:has_expression_children(AST) of
+        true -> 
+            count_overlapping_lines(ess_ast:expression_children(AST));
+        false ->
+            0
+    end.
+
+count_overlapping_lines(Cs) ->        
+    Lines = [ element(2, C) || C <- Cs ],
+    UL = lists:usort(Lines),
+    length(Lines) - length(UL).
+
+%% --------------------------------------------------
 lines_per_function(AST) ->
     LNs = get_linenumbers(AST),
     length(lists:usort(lists:flatten(LNs))).
@@ -522,6 +422,7 @@ function_arity(AST) ->
 clauses_per_function(AST) ->
     length(function_clauses(AST)).
 
+%% --------------------------------------------------
 variable_steppings_per_function({function,_,_,_,Clauses}) ->
     sum([ variable_steppings_in_body(Clause) || Clause <- Clauses ]).
 
@@ -595,205 +496,70 @@ is_all_integers(L) ->
 is_ascii_integer(X) when (X>=$0), (X=<$9) -> true;
 is_ascii_integer(_) -> false.
 
+%% --------------------------------------------------
 complexity(AST) ->
-    FromMatchLHS = false,
-    complexity(AST, FromMatchLHS).
+    NodeF = fun complexity_node/2,
+    Gen  = fun complexity_gen/2,
+    History = #hist{},
+    ess_ast:traverse(AST, NodeF, Gen, History).
 
-complexity(L, FromMatchLHS) when is_list(L) ->
-    max([ complexity(X, FromMatchLHS) || X <- L ]);
-complexity({function, _, _, _, Clauses}, FromMatchLHS) ->
-    max([ complexity(X, FromMatchLHS) || X <- Clauses ]);
-complexity({clause, _, Match, Guards, Exprs}, FromMatchLHS) ->
-    max([complexity(Match, FromMatchLHS),
-         complexity(Guards, FromMatchLHS),
-         complexity(Exprs, FromMatchLHS)]);
-complexity({match, _, LHS, RHS}, FromMatchLHS) ->
-    max(complexity(LHS, true) , complexity(RHS, FromMatchLHS));
-complexity({call, _, _, Args}, FromMatchLHS) ->
-    1+complexity(Args, FromMatchLHS);
-complexity({bin, _, Elems}, FromMatchLHS) ->
-    1+complexity(Elems, FromMatchLHS);
-complexity({bin_element, _, Elem, _, _}, FromMatchLHS) ->
-    complexity(Elem, FromMatchLHS);
-complexity({'case', _, Expr, Clauses}, FromMatchLHS) ->
-    max(complexity(Expr, FromMatchLHS), complexity(Clauses, FromMatchLHS));
-complexity({'if', _, Clauses}, FromMatchLHS) ->
-    complexity(Clauses, FromMatchLHS);
-complexity({'receive', _, Clauses}, FromMatchLHS) ->
-    complexity(Clauses, FromMatchLHS);
-complexity({'receive', _, Clauses, _, AfterExprs}, FromMatchLHS) ->
-    max(complexity(Clauses, FromMatchLHS), 
-        complexity(AfterExprs, FromMatchLHS));
-complexity({cons,_,Hd, Tl}, FromMatchLHS) ->
-    max(complexity(Hd, FromMatchLHS), 
-        complexity(Tl, FromMatchLHS));
-complexity({record, _, _, Fields}, FromMatchLHS) ->
-    1+complexity(Fields, FromMatchLHS);
-complexity({record, _, Var, _, RecordField}, FromMatchLHS) ->
-    1+max(complexity(Var, FromMatchLHS), 
-          complexity(RecordField, FromMatchLHS));
-complexity({record_field, _, _, Expr}, FromMatchLHS) ->
-    complexity(Expr, FromMatchLHS);
-complexity({record_field, _, Expr1, _, Expr2}, FromMatchLHS) ->
-    1 + (1+complexity(Expr1, FromMatchLHS)) 
-        + complexity(Expr2, FromMatchLHS);
-complexity({record_index, _, _, Expr}, FromMatchLHS) ->
-    1+complexity(Expr, FromMatchLHS);
-complexity({tuple, _, Elements}, FromMatchLHS) ->
+complexity_node(Val, Chs) -> 
+    Val + max(Chs).
+
+complexity_gen({record_field, _, _, _, _}, _) ->
+    2;
+complexity_gen({tuple, _, Elements}, H) ->
+    FromMatchLHS = H#hist.lhs > 0,
     case FromMatchLHS andalso (length(Elements) > 2) of
         true ->
-            length(Elements) + complexity(Elements, FromMatchLHS);
+            length(Elements);
         false ->
-            1 + complexity(Elements, FromMatchLHS)
+            1
     end;
-complexity({op, _, _, LHS, RHS}, FromMatchLHS) ->
-    1+ max(complexity(LHS, FromMatchLHS), 
-           complexity(RHS, FromMatchLHS));
-complexity({op, _, _, Expr}, FromMatchLHS) ->
-    1+complexity(Expr, FromMatchLHS);
-complexity({lc, _, Body, Generator}, FromMatchLHS) ->
-    1+ max(complexity(Body, FromMatchLHS), 
-           complexity(Generator, FromMatchLHS));
-complexity({generate, _, Expr, Guards}, FromMatchLHS) ->
-    max(complexity(Expr, FromMatchLHS), 
-        complexity(Guards, FromMatchLHS));
-complexity({b_generate, _, Expr, Guards}, FromMatchLHS) ->
-    max(complexity(Expr, FromMatchLHS), 
-        complexity(Guards, FromMatchLHS));
-complexity({'catch', _, CallExpr}, FromMatchLHS) ->
-    1+complexity(CallExpr, FromMatchLHS);
-complexity({'fun', _, Expr}, FromMatchLHS) ->
-    1+complexity(Expr, FromMatchLHS);
-complexity({clauses, Clauses}, FromMatchLHS) ->
-    complexity(Clauses, FromMatchLHS);
-complexity({'try', _, CallExprs, _, Exprs, _}, FromMatchLHS)->
-    1+ max(complexity(CallExprs, FromMatchLHS), 
-           complexity(Exprs, FromMatchLHS));
-complexity({block, _, CallExprs}, FromMatchLHS) ->
-    1+complexity(CallExprs, FromMatchLHS);
-complexity({bc, _, Body, Generator}, FromMatchLHS) ->
-    1+ max(complexity(Body, FromMatchLHS), 
-           complexity(Generator, FromMatchLHS));
+complexity_gen(AST, _) ->
+    case is_complexity_plus_one(AST) of
+        true -> 1;
+        _ -> 0
+    end.
 
-complexity({function, _, _}, _FromMatchLHS) -> 0;
-complexity({function, _, _, _}, _FromMatchLHS) -> 0;
-complexity({nil, _}, _FromMatchLHS) -> 0;
-complexity({atom, _, _}, _FromMatchLHS) -> 0;
-complexity({var, _, _}, _FromMatchLHS) -> 0;
-complexity({string, _, _}, _FromMatchLHS) -> 0;
-complexity({integer, _, _}, _FromMatchLHS) -> 0;
-complexity({float, _, _}, _FromMatchLHS) -> 0;
-complexity({char, _, _}, _FromMatchLHS) -> 0.
+-define(COMPLEXITY_PLUS_ONE_TYPE_LIST, 
+        [call, bin, record, record_index, op, lc,
+         'catch', 'fun', 'try', block, bc, call, bin]).
+
+is_complexity_plus_one(AST) when is_tuple(AST) ->
+    is_complexity_plus_one(element(1, AST));
+is_complexity_plus_one(Type) ->
+    lists:member(Type, ?COMPLEXITY_PLUS_ONE_TYPE_LIST).
+
 
 %% --------------------------------------------------
+nested_clauses(AST) ->
+    NodeF = fun nested_clauses_node/2,
+    Gen  = fun nested_clauses_gen/2,
+    History = #hist{},
+    ess_ast:traverse(AST, NodeF, Gen, History).
 
-nested_clauses(L) ->
-    nested_clauses(L, 0).
+nested_clauses_node(Val, Chs) ->
+    Val + max(Chs).
 
-nested_clauses({function, _, _, _, Clauses}, ClauseDepth) ->
-    max([ nested_clauses(X, ClauseDepth) || X <- Clauses ]);
-nested_clauses(L, ClauseDepth) when is_list(L) ->
-    max([ nested_clauses(X, ClauseDepth) || X <- L ]);
-nested_clauses({clause, _, Match, Guards, Exprs}, ClauseDepth) ->
-    max([nested_clauses(Match, ClauseDepth),
-         nested_clauses(Guards, ClauseDepth),
-         nested_clauses(Exprs, ClauseDepth)]);
-nested_clauses({match,_,RHS,LHS}, ClauseDepth) ->
-    max(nested_clauses(RHS, ClauseDepth),
-        nested_clauses(LHS, ClauseDepth));
-nested_clauses({call,_, _, Args}, ClauseDepth) ->
-    nested_clauses(Args, ClauseDepth);
-nested_clauses({bin,_, Elems}, ClauseDepth) ->
-    nested_clauses(Elems, ClauseDepth);
-nested_clauses({bin_element,_, Elem, _, _}, ClauseDepth) ->
-    nested_clauses(Elem, ClauseDepth);
-nested_clauses({'case',_, Expr, Clauses}, ClauseDepth) ->
-    NewClauseDepth = 1 + ClauseDepth,
-    max(nested_clauses(Expr, NewClauseDepth), 
-        nested_clauses(Clauses, NewClauseDepth));
-nested_clauses({'if', _, Clauses}, ClauseDepth) ->
-    nested_clauses(Clauses, ClauseDepth + 1);
-nested_clauses({'receive', _, Clauses}, ClauseDepth) ->
-    nested_clauses(Clauses, ClauseDepth + 1);
-nested_clauses({'receive',_,Clauses, _, AfterExprs}, ClauseDepth) ->
-    NewClauseDepth = ClauseDepth + 1,
-    max(nested_clauses(Clauses, NewClauseDepth), 
-        nested_clauses(AfterExprs, NewClauseDepth));
-nested_clauses({cons,_,Hd, Tl}, ClauseDepth) ->
-    max(nested_clauses(Hd, ClauseDepth),
-        nested_clauses(Tl, ClauseDepth));
-nested_clauses({record,_,_,Fields}, ClauseDepth) ->
-    nested_clauses(Fields, ClauseDepth);
-nested_clauses({record,_,Var,_,RecordField}, ClauseDepth) ->
-    max(nested_clauses(Var, ClauseDepth), 
-        nested_clauses(RecordField, ClauseDepth));
-nested_clauses({record_field,_,_,Expr}, ClauseDepth) ->
-    nested_clauses(Expr, ClauseDepth);
-nested_clauses({record_field,_,Expr1,_,Expr2}, ClauseDepth) ->
-    max(nested_clauses(Expr1, ClauseDepth), 
-        nested_clauses(Expr2, ClauseDepth));
-nested_clauses({record_index,_,_,Expr}, ClauseDepth) ->
-    nested_clauses(Expr, ClauseDepth);
-nested_clauses({tuple,_,Elements}, ClauseDepth) ->
-    nested_clauses(Elements, ClauseDepth);
-nested_clauses({op, _, _, LHS, RHS}, ClauseDepth) ->
-    max(nested_clauses(LHS, ClauseDepth),
-        nested_clauses(RHS, ClauseDepth));
-nested_clauses({op, _, _, Expr}, ClauseDepth) ->
-    nested_clauses(Expr, ClauseDepth);
-nested_clauses({lc, _, Body, Generator}, ClauseDepth) ->
-    max(nested_clauses(Body, ClauseDepth),
-        nested_clauses(Generator, ClauseDepth));
-nested_clauses({generate, _, Expr, Guards}, ClauseDepth) ->
-    max(nested_clauses(Expr, ClauseDepth), 
-        nested_clauses(Guards, ClauseDepth));
-nested_clauses({b_generate, _, Expr, Guards}, ClauseDepth) ->
-    max(nested_clauses(Expr, ClauseDepth), 
-        nested_clauses(Guards, ClauseDepth));
-nested_clauses({'catch', _, CallExpr}, ClauseDepth) ->
-    nested_clauses(CallExpr, ClauseDepth);
-nested_clauses({'fun', _, Expr}, ClauseDepth) ->
-    nested_clauses(Expr, ClauseDepth);
-nested_clauses({clauses,Clauses}, ClauseDepth) ->
-    nested_clauses(Clauses, ClauseDepth);
-nested_clauses({'try', _, CallExprs, Clauses, CatchClauses,_}, ClauseDepth)->
-    NewClauseDepth = ClauseDepth + 1,
-    max([nested_clauses(CallExprs, NewClauseDepth), 
-         nested_clauses(Clauses, NewClauseDepth),
-         nested_clauses(CatchClauses, NewClauseDepth)]);
-nested_clauses({block, _, CallExprs}, ClauseDepth) ->
-    nested_clauses(CallExprs, ClauseDepth +1 );
-nested_clauses({bc,_,Body,Generator}, ClauseDepth) ->
-    max(nested_clauses(Body, ClauseDepth), 
-        nested_clauses(Generator, ClauseDepth));
+nested_clauses_gen(AST, Hist) ->
+    case is_leaf(AST) of
+        true ->
+            get_clause_depth(Hist);
+        false ->
+            0
+    end.
 
-nested_clauses({function, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({function, _, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({nil, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({atom, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({var, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({string, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({integer, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({float, _, _}, ClauseDepth) -> ClauseDepth;
-nested_clauses({char, _, _}, ClauseDepth) -> ClauseDepth.
+get_clause_depth(#hist{'case' = C,
+                       'try' = T,
+                       'if' = I,
+                       'receive' = R,
+                       'block' = B}) ->
+    C + T + I + R + B.
 
 %% ------------------------------------------------------------
 
-
-repeats_on_same_line(LNs) ->
-    repeats_on_same_line(LNs,hd(LNs),0).
-
-repeats_on_same_line([N|R],N,Counted) ->
-    repeats_on_same_line(R,N,Counted+1);
-repeats_on_same_line([N|R],_,Counted) ->
-    [ Counted | repeats_on_same_line(R,N,1) ];
-repeats_on_same_line([],_,Counted) ->
-    [ Counted ].
-
-
-get_toplevel_linenumbers({clause,_Line,_,_,Expressions}) ->
-    [element(2,L) || L <- Expressions].
-
+%% ================================================================================
 
 get_linenumbers({function,_Line,_,_,Clauses}) ->
     [ get_linenumbers(C) || C <- Clauses ];
@@ -838,13 +604,71 @@ get_linenumbers_body([{Marker,LN,_,_,_}|T]) when is_atom(Marker) ->
     [LN|get_linenumbers_body(T)].
 
 
+snake_case(Input) ->
+    case is_snake_cased(to_string(Input)) of
+        true -> 0;
+        _ -> 1
+    end.
+
+is_snake_cased(String) ->
+    OnlyLowerCase = string:to_lower(String) == String,
+    HasUnderscore = lists:member($_, String),
+    IMN = is_module_name(String),
+    OnlyLowerCase or HasUnderscore or IMN.
+
+is_module_name(String) ->
+    index_of_first_uppercase(String) =< 4.
+
+index_of_first_uppercase(S) ->
+    index_of_first_uppercase(1, S).
+
+index_of_first_uppercase(_, []) ->
+    0;
+index_of_first_uppercase(Ix, [C|_]) when C =< $Z, C >= $A ->
+    Ix;
+index_of_first_uppercase(Ix, [_|Cs]) ->
+    index_of_first_uppercase(Ix+1, Cs).
+
+camel_case(Input) ->
+    case is_camel_cased(to_string(Input)) of
+        true -> 0;
+        _ ->  1
+    end.
+
+is_camel_cased([$_|_]) ->
+    true;
+is_camel_cased(String) when length(String) > 3 ->
+    HasUpperCase = string:to_lower(String) /= String,
+    HasLowerCase = string:to_upper(String) /= String,
+    HasUnderscore = lists:member($_, String),
+    HasUpperCase andalso HasLowerCase andalso not HasUnderscore;
+is_camel_cased(_) ->
+    true.
+
+is_leaf({function, _, _}) -> true;
+is_leaf({function, _, _, _}) -> true;
+is_leaf({nil, _}) -> true;
+is_leaf({atom, _, _}) -> true;
+is_leaf({var, _, _}) -> true;
+is_leaf({string, _, _}) -> true;
+is_leaf({integer, _, _}) -> true;
+is_leaf({float, _, _}) -> true;
+is_leaf({char, _, _}) -> true;
+is_leaf(_) -> false.
+
 
 %%-----------------------
 %% Utilities
 
+make_name({function, _, Name, Arity, _}) ->
+    list_to_atom(lists:flatten(io_lib:format("~p|~p",[Name, Arity]))).
+
+to_string(X) when is_atom(X) -> atom_to_list(X);
+to_string(X) when is_list(X) -> X.
+
+
 usort(L) -> lists:usort(L).
 
-sum(A, B) -> A+B.
 sum(L) -> lists:sum(L).
 
 max([]) -> 0;

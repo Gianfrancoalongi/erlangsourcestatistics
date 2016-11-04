@@ -56,7 +56,7 @@ get_default_options() ->
 default_metrics() ->
     [{function_naming, {0, 1}},
      {variable_naming, {1, 5}},
-     {arity, {3, 8}},
+     {arity, {3, 8}},     
      {clauses, {4, 10}},
      {expressions_per_function, {20, 50}},
      {variable_steppings, {1, 5}},
@@ -64,12 +64,9 @@ default_metrics() ->
      {space_after_comma, {3, 10}},
      {warnings, {0, 1}},
      {nested_clauses, {1, 3}},
-
+     {expressions_per_line, {0, 3}},
      {complexity, {2, 6}},
      {line_lengths, {75, 120}}].
-
-get_limit_for_metric(Metric) ->
-    gv(Metric, default_metrics()).
 
 find_file_opts(LineOpts) ->
     HomeDir = get_home_dir(),

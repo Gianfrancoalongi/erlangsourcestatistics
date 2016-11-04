@@ -435,7 +435,56 @@ complexity_test_() ->
               ?assertEqual(0, Penalty)
       end}
     ].
-      
+
+multiple_expressions_on_same_line_test_() ->
+    [
+     {"arguments on same line is ok",
+      fun() ->
+              Code = ["f(A, B, C, D) -> 
+                             {A, B, C, D}."],
+              Penalty = run_tc(expressions_per_line, Code),
+              ?assertEqual(0, Penalty)
+      end},
+     {"multiple assignments on same line is bad",
+      fun() ->
+              Code = ["f() -> 
+                             A = 1, B = 2."],
+              Penalty = run_tc(expressions_per_line, Code),
+              ?assertEqual(3, Penalty)
+      end},
+     {"multiple function calls on same line is bad",
+      fun() ->
+              Code = ["f() -> 
+                             m:f(), l:k()."],
+              Penalty = run_tc(expressions_per_line, Code),
+              ?assertEqual(3, Penalty)
+      end},
+     {"multiple tuple/list expressions on same line is bad",
+      fun() ->
+              Code = ["f() -> 
+                             {1,2}, [1,2]."],
+              Penalty = run_tc(expressions_per_line, Code),
+              ?assertEqual(3, Penalty)
+      end},
+     {"compact case clause on same line is OK",
+      fun() ->
+              Code = ["f() -> 
+                             case m:f() of 
+                                 true -> ok; 
+                                 _ -> no 
+                             end."],
+              Penalty = run_tc(expressions_per_line, Code),
+              ?assertEqual(0, Penalty)
+      end}
+     ,{"case on same line is bad",
+      fun() ->
+              Code = ["f() -> 
+                             case m:f() of true -> ok; _ -> no end."],
+              Penalty = run_tc(expressions_per_line, Code),
+              ?assertEqual(7, Penalty)
+      end}
+    ].
+              
 
 
 %% ---------------------------------------------------------------------------
