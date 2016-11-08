@@ -3,7 +3,48 @@
 
 -export([dir/1,
          dir/2,
-         quality/2]).
+         quality/2,
+         generate_raw_values_csv/2
+        ]).
+
+generate_raw_values_csv(Tree, Opts) ->
+    File = filename:join(gv(out_dir, Opts),"res.csv"),
+    file:write_file(File, <<>>),
+    RV = lists:flatten(collect_raw_values(undefined, Tree)),
+    Headings = get_headings(RV),
+    write_headings(File, Headings),
+    write_csv(File, RV),
+    Tree.
+
+get_headings(RV) ->
+    RVH = [ K || {K, _} <- element(3, hd(RV))],
+    [ name | RVH ].
+
+write_headings(File, Headings) ->
+    HS = [ to_string(X) || X <- Headings ],
+    S = string:join(HS, ",")++"\n",
+    file:write_file(File, S, [append]).
+
+write_csv(File, RV) ->
+    [ write_one_row(File, X) || X <- RV ].
+
+write_one_row(File, {Mod, Name, RV}) ->
+    V = [ integer_to_list(V) || {_, V} <- RV ],
+    ModFunc = Mod++":"++to_string(Name),
+    R = [ ModFunc | V ],
+    S = string:join(R, ",")++"\n",
+    file:write_file(File, S, [append]).
+
+collect_raw_values(Module, #tree{type=function, name=N, raw_values=RV}) ->
+    {Module, N, RV};
+collect_raw_values(_, #tree{type=file, name=Module, children=CS}) ->
+    [ collect_raw_values(Module, C) || C <- CS ];
+collect_raw_values(M, #tree{type=dir, children=CS}) ->
+    [ collect_raw_values(M, C) || C <- CS ].
+
+dump(Name, RawValues) ->
+    FMT = io_lib:format(" ~p : ~w~n", [Name, RawValues]),
+    file:write_file("/tmp/dump.tree", FMT, [append]).
 
 quality(T = #tree{type=function}, Opts) ->
     RV = T#tree.raw_values,

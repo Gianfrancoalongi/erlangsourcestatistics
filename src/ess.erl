@@ -17,8 +17,8 @@ analyse(Path, CommandLineOpts) ->
         [ fun init_timing/1,
           fun ess_engine:dir/2,
           fun ess_engine:quality/2,
+          fun ess_engine:generate_raw_values_csv/2,
           fun set_top_level_name/1,
-          fun save_csv_file/2,
           fun ess_graphics:generate/2,
           fun print_timing/1
         ]).
@@ -124,23 +124,6 @@ set_top_level_name(T=#tree{name=Name}) ->
         ["src", "is-sbg" | _] -> T#tree{name="SBG"};
         _ -> T
     end.
-
-save_csv_file(T, Opts) ->
-    L = format_tree("", T),
-    File = filename:join(gv(out_dir, Opts),"res.csv"),
-    file:write_file(File, list_to_binary(L)),
-    T.
-
-format_tree(_Pad, #tree{type=function}) ->
-    [];
-format_tree(Pad, T=#tree{quality=Q, children=Ch}) ->
-    [io_lib:format("~s~s, ~p~n", [Pad, tree_name(T), Q]),
-     format_tree(Pad++"    ", Ch)];
-format_tree(Pad, L) when is_list(L) ->
-    [format_tree(Pad, C) || C <- L].
-
-tree_name(#tree{type=file, name=Name}) -> filename:basename(Name);
-tree_name(#tree{name=Name}) -> Name.
 
 init_timing(Tree) ->
     put(start_time, erlang:monotonic_time()),
