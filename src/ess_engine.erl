@@ -13,11 +13,11 @@ generate_raw_values_csv(Tree, Opts) ->
     RV = lists:flatten(collect_raw_values(undefined, Tree)),
     Headings = get_headings(RV),
     write_headings(File, Headings),
-    write_csv(File, RV),
+    write_csv(File, Headings, RV),
     Tree.
 
 get_headings(RV) ->
-    RVH = [ K || {K, _} <- element(3, hd(RV))],
+    RVH = lists:usort([ K || {_,_,L} <- RV, {K, _} <- L]),
     [ name | RVH ].
 
 write_headings(File, Headings) ->
@@ -25,26 +25,28 @@ write_headings(File, Headings) ->
     S = string:join(HS, ",")++"\n",
     file:write_file(File, S, [append]).
 
-write_csv(File, RV) ->
-    [ write_one_row(File, X) || X <- RV ].
+write_csv(File, Headings, RV) ->    
+    [ write_one_row(File, Headings, X) || X <- RV ].
 
-write_one_row(File, {Mod, Name, RV}) ->
-    V = [ integer_to_list(V) || {_, V} <- RV ],
+write_one_row(File, Headings, {Mod, Name, RV}) ->
     ModFunc = Mod++":"++to_string(Name),
-    R = [ ModFunc | V ],
-    S = string:join(R, ",")++"\n",
+    RV2 = [{name, ModFunc} | RV],    
+    V = [ to_string(gv(H, RV2, 0)) || H <- Headings ],
+    S = string:join(V, ",")++"\n",
     file:write_file(File, S, [append]).
 
 collect_raw_values(Module, #tree{type=function, name=N, raw_values=RV}) ->
     {Module, N, RV};
-collect_raw_values(_, #tree{type=file, name=Module, children=CS}) ->
-    [ collect_raw_values(Module, C) || C <- CS ];
+collect_raw_values(_, #tree{type=file, name=Module, children=CS, raw_values=RV}) ->
+    E = {Module, "", RV},
+    io:format("E: ~p~n", [E]),
+    [ E | [collect_raw_values(Module, C) || C <- CS ]];
 collect_raw_values(M, #tree{type=dir, children=CS}) ->
     [ collect_raw_values(M, C) || C <- CS ].
 
-dump(Name, RawValues) ->
-    FMT = io_lib:format(" ~p : ~w~n", [Name, RawValues]),
-    file:write_file("/tmp/dump.tree", FMT, [append]).
+%% dump(Name, RawValues) ->
+%%     FMT = io_lib:format(" ~p : ~w~n", [Name, RawValues]),
+%%     file:write_file("/tmp/dump.tree", FMT, [append]).
 
 quality(T = #tree{type=function}, Opts) ->
     RV = T#tree.raw_values,
@@ -275,16 +277,16 @@ lexical_analyse_string(Str) ->
     Lines = strip_lines(divide_into_lines(Str)),
     seq_accum([], Lines,
               [fun count_comment_and_code_lines/1,
-               fun analyse_space_after_comma/1]).
+               fun analyse_space_after_comma/1,
+               fun count_fixme_todo/1]).
 
 count_comment_and_code_lines(L) ->
     Tot = length(L),
-    LineLengths = line_lengths(L),
     {Code, Comment, Blank} = count_comment_and_code_lines2(L, 0, 0, 0),
     Values = [{total_lines, Tot},
               {lines_of_code, Code},
               {lines_of_comments, Comment},
-              {line_lengths, LineLengths},
+              {long_lines, long_lines(L)},
               {blank_lines, Blank}],
     handle_comment_percent(Values).
 
@@ -303,14 +305,8 @@ count_comment_and_code_lines2([L | Ls], Code, Comment, Blank) ->
 is_comment_line("%"++_) -> true;
 is_comment_line(_) -> false.
 
-line_lengths(Ls) ->
-    N = length(Ls),
-    Lengths =[ length(L) || L <- Ls ],
-    Max = lists:max(Lengths),
-    Min = lists:min(Lengths),
-    Sum = lists:sum(Lengths),
-    Mean = round(Sum / N),
-    #val{max=Max, min=Min, avg=Mean, sum=Sum, n=N}.
+long_lines(Ls) ->
+    sum([ 1 || L <- Ls , length(L) > 80 ]).
 
 analyse_space_after_comma(Ls) ->
     Faults = sum([ sac(L) || L <- Ls, not is_comment_line(L) ]),
@@ -341,6 +337,18 @@ dil([C|R],Current,Acc) ->
 
 strip_lines(Ls) ->
     [string:strip(L) || L <- Ls ].
+
+count_fixme_todo(LS) ->
+    Count = sum([ look_for_fixme_todo(S) || S <- LS ]),
+    [{fixme_todo, Count}].
+
+look_for_fixme_todo(S) ->
+    case re:run(S, ".*%.*(fixme|todo).*", [caseless]) of
+        nomatch -> 
+            0;
+        _ ->
+            1
+    end.
 
 file_raw_values(AST, Warnings, F, Opts) ->
     EA = export_all_metric(AST),
@@ -704,6 +712,7 @@ is_leaf(_) -> false.
 make_name({function, _, Name, Arity, _}) ->
     list_to_atom(lists:flatten(io_lib:format("~p|~p",[Name, Arity]))).
 
+to_string(X) when is_integer(X) -> integer_to_list(X);
 to_string(X) when is_atom(X) -> atom_to_list(X);
 to_string(X) when is_list(X) -> X.
 

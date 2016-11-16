@@ -62,11 +62,12 @@ default_metrics() ->
      {variable_steppings, {1, 5}},
      {export_all, {0,1}},
      {space_after_comma, {3, 10}},
+     {fixme_todo, {0, 1}},
      {warnings, {0, 1}},
      {nested_clauses, {1, 3}},
      {expressions_per_line, {0, 3}},
      {complexity, {2, 6}},
-     {line_lengths, {75, 120}}].
+     {long_lines, {0, 8}}].
 
 find_file_opts(LineOpts) ->
     HomeDir = get_home_dir(),

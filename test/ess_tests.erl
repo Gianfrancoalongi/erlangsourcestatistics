@@ -475,8 +475,8 @@ multiple_expressions_on_same_line_test_() ->
                              end."],
               Penalty = run_tc(expressions_per_line, Code),
               ?assertEqual(0, Penalty)
-      end}
-     ,{"case on same line is bad",
+      end},
+     {"case on same line is bad",
       fun() ->
               Code = ["f() -> 
                              case m:f() of true -> ok; _ -> no end."],
@@ -485,6 +485,56 @@ multiple_expressions_on_same_line_test_() ->
       end}
     ].
               
+fixme_comment_is_penalized_test() ->
+    Code = ["f() -> ",
+            "  %fixme: write a proper function ",
+            "  ok."],
+    Hits = run_tc2(fixme_todo, Code),
+    ?assertEqual(1, Hits).
+
+todo_comment_is_penalized_test() ->
+    Code = ["f() -> ",
+            "  %todo: write a proper function ",
+            "  ok."],
+    Hits = run_tc2(fixme_todo, Code),
+    ?assertEqual(1, Hits).
+
+upper_todo_comment_is_penalized_test() ->
+    Code = ["f() -> ",
+            "  %TODO: write a proper function ",
+            "  ok."],
+    Hits = run_tc2(fixme_todo, Code),
+    ?assertEqual(1, Hits).
+
+fixme_variable_not_counted_test() ->
+    Code = ["f() -> ",
+            "  FixMe = 23."],
+    Hits = run_tc2(fixme_todo, Code),
+    ?assertEqual(0, Hits).
+
+
+a_long_line_is_more_than_80_characters_wide_test() ->
+    Code = ["f() -> ",
+            generate_line_with_width(81),
+            "  ok."],
+    Hits = run_tc2(long_lines, Code),
+    ?assertEqual(1, Hits).
+
+a_line_up_to_80_characters_wide_is_ok_test() ->
+    Code = ["f() -> ",
+            generate_line_with_width(80),
+            "  ok."],
+    Hits = run_tc2(long_lines, Code),
+    ?assertEqual(0, Hits).
+
+
+trace(Conf) ->
+    dbg:tracer(),
+    dbg:p(all,[c]),
+    [ dbg:tpl(M,F,x) || {M,F} <- Conf].
+
+stop_trace() ->
+    dbg:stop_clear().
 
 
 %% ---------------------------------------------------------------------------
@@ -495,8 +545,18 @@ run_tc(Metric, CodeSnippet) ->
     Opts = ess:get_options(Dir, [MetricOpt]),
     Tree = ess_engine:dir(Dir, Opts),
     Q = ess_engine:quality(Tree, Opts),
-%    io:format(user, "Q: ~p~n", [Q]),
     gv(Metric, Q#tree.quality_penalty).
+
+run_tc2(Metric, CodeSnippet) ->
+    Path = mk_erlang_file(CodeSnippet),
+    Dir = filename:dirname(Path),
+    MetricOpt = {metrics, [Metric]},
+    Opts = ess:get_options(Dir, [MetricOpt]),    
+    DirT = ess_engine:dir(Dir, Opts),
+    FileT = hd(DirT#tree.children),
+    FuncT = hd(FileT#tree.children),
+    RW = FileT#tree.raw_values ++ FuncT#tree.raw_values,
+    gv(Metric, RW).
 
 mk_erlang_file(CodeSnippet) ->
     TmpFile = mk_tmp_file("x.erl"),
@@ -510,8 +570,15 @@ mk_tmp_file(Name) ->
     TmpDir = os:cmd("mktemp -d"),
     filename:join(TmpDir -- "\n", Name).
 
+generate_line_with_width(Width) ->
+    A = "V = ",
+    C = Width - length(A) - 3,
+    A ++ "\"" ++ string:copies("a", C) ++ "\",".
+    
+
 join(Str) ->
     string:join(Str, "\n").
 
 gv(Key, Proplist) ->
     proplists:get_value(Key, Proplist).
+
