@@ -13,11 +13,13 @@ analyse(Path) ->
 analyse(Path, CommandLineOpts) ->
     T1 = erlang:monotonic_time(),
     Opts = get_options(Path, CommandLineOpts),
+    ess_duplication:assure_tab(),
     seq(Path, Opts,
         [ fun init_timing/1,
           fun ess_engine:dir/2,
           fun ess_engine:quality/2,
           fun ess_engine:generate_raw_values_csv/2,
+          fun ess_duplication:check/1,
           fun set_top_level_name/1,
           fun ess_graphics:generate/2,
           fun print_timing/1

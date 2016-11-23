@@ -235,6 +235,16 @@ file(F, Opts, IncPaths) ->
         {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPaths),
         {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} =
             beam_lib:chunks(Bin,[abstract_code]),
+
+        
+        %% dbg:tracer(),
+        %% dbg:p(all,[c]),
+        %% dbg:tpl(ess_duplication, x),
+        try ess_duplication:detect(Mod, AST)
+        catch _:Error -> 
+                io:format(user, "ERROR:~p~n", [erlang:get_stacktrace()])
+        end,
+        
         RawValues = file_raw_values(AST, Warnings, F, Opts),        
         RawChildren = analyse_functions(AST, Opts),
         io:format("  f: ~s: ok~n", [F]),
