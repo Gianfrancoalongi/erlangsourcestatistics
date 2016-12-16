@@ -5,27 +5,61 @@
 -export([check/1]).
 -export([assure_tab/0]).
 
-check(AST) ->
-    ets_walk(ets:first(?MODULE)),
-    AST.
+-import(ess_lib, [gv/2, gv/3]).
 
-ets_walk('$end_of_table') ->
-    ok;
-ets_walk(Key) ->
-    case ets:lookup(?MODULE, Key) of
-        L when length(L) > 1 -> 
-            report_duplicate(L);
-        _ ->
-            ok
-    end,
-    ets_walk(ets:next(?MODULE, Key)).
+-define(MINIMUM_STRUCTURAL_DUPLICATION_DEPTH, 16).
 
-report_duplicate(L) ->
-    Code = element(1, hd(L)),
-    Lines = [ element(2, X) || X <- L ],
-    io:format("DUPLICATE: ~p ~p~n",
-              [Code, Lines]).
-    
+
+check(Tree) ->
+    ess_lib:reset_log(dup),
+    Duplicates = ets_walk(),
+    report_duplicates_to_log_file(Duplicates),
+    T2 = insert_duplicate_info_in_tree(Duplicates, Tree),
+    generate_toplevel_duplication_count(T2, Duplicates).
+
+generate_toplevel_duplication_count(T=#tree{raw_values=RV}, Duplicates) ->
+    Count = lists:sum([ length(L)-1 || {_, L} <- Duplicates ]),
+    T#tree{raw_values=[{total_duplicates, Count} | RV]}.
+
+insert_duplicate_info_in_tree(Duplicates, Tree) ->
+    ModCounts = count_duplication_per_module(Duplicates),
+    decorate_tree(ModCounts, Tree).
+
+decorate_tree(ModCounts, T = #tree{type=dir, children=CS}) ->
+    CS2 = [ decorate_tree(ModCounts, C) || C <- CS ],
+    T#tree{children = CS2};
+decorate_tree(ModCounts, T = #tree{type=file, name=Name, raw_values=RV}) ->
+    Mod = file_name_to_mod(Name),
+    Count = gv(Mod, ModCounts, 0),
+    Elem = {code_duplicates, Count},
+    T#tree{raw_values= [Elem | RV]}.
+
+file_name_to_mod(N) ->
+    list_to_atom(filename:basename(N, ".erl")).
+
+count_duplication_per_module(Duplicates) ->
+    AllDups = lists:sort(lists:flatten([ X || {_, X} <- Duplicates ])),
+    Mods = [ K || {K,_} <- AllDups],
+    count_mods(Mods).
+
+count_mods([Mod | L]) -> 
+    count_mods(Mod, 1, L).
+
+count_mods(Mod, Count, []) ->
+    [{Mod, Count}];
+count_mods(Mod, Count, [Mod | L]) ->
+    count_mods(Mod, Count+1, L);
+count_mods(Mod, Count, [NewMod | L]) ->
+    [{Mod, Count} | count_mods(NewMod, 1, L)].
+
+report_duplicates_to_log_file(L) ->
+    [ report_duplicate(X) || X <- L ].
+
+report_duplicate({Code, Info}) ->
+    ess_lib:log(dup, 
+                "---------~n"
+                "~p~n"
+                "~p~n~n", [Info, Code]).
 
 detect(Module, ModuleAST) ->
     AST = pick_functions(ModuleAST),
@@ -173,7 +207,7 @@ maybe_store(Anon, Line) ->
 is_big_enough(X) when element(1, X) == cons ->
     false;
 is_big_enough(X) ->
-    depth(X, 1) > 7.
+    depth(X, 1) > ?MINIMUM_STRUCTURAL_DUPLICATION_DEPTH.
 
 depth(L, D) when is_tuple(L) ->
     depth(tuple_to_list(L), D);
@@ -209,4 +243,32 @@ init_tab(Tab) ->
 store(Key, Val) ->
     ets:insert(?MODULE, {Key, Val}).
 
+ets_walk() ->
+    ets_walk(ets:first(?MODULE)).
 
+ets_walk('$end_of_table') ->
+    [];
+ets_walk(Key) ->
+    NextKey = ets:next(?MODULE, Key),
+    case ets:lookup(?MODULE, Key) of
+        L when length(L) > 1 -> 
+            [ {Key, value_from_entries(L)} | ets_walk(NextKey)];
+        _ -> 
+            ets_walk(NextKey)
+    end.
+
+value_from_entries(L) ->
+    [ V || {_, V} <- L ].
+
+    %% ets:foldl(
+    %%   fun(Entry, Acc) ->
+    %%           case is_duplicate(Entry) of
+    %%               true -> [Entry | Acc];
+    %%               _ -> Acc
+    %%           end
+    %%   end,
+    %%   [],
+    %%   ?MODULE).
+
+%% is_duplicate({_, L}) -> 
+%%     length(L) > 1.

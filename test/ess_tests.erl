@@ -539,6 +539,7 @@ stop_trace() ->
 
 %% ---------------------------------------------------------------------------
 run_tc(Metric, CodeSnippet) ->
+    ess_duplication:assure_tab(),
     Path = mk_erlang_file(CodeSnippet),
     Dir = filename:dirname(Path),
     MetricOpt = {metrics, [Metric]},
@@ -548,6 +549,7 @@ run_tc(Metric, CodeSnippet) ->
     gv(Metric, Q#tree.quality_penalty).
 
 run_tc2(Metric, CodeSnippet) ->
+    ess_duplication:assure_tab(),
     Path = mk_erlang_file(CodeSnippet),
     Dir = filename:dirname(Path),
     MetricOpt = {metrics, [Metric]},
