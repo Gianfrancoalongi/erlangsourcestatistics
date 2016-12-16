@@ -8,7 +8,11 @@ test: all
 
 PROJ=/local/scratch/etxpell/proj
 reg:
+	mkdir -p ${PROJ}/sgc/tools/erlangsourcestatistics/src/
+	mkdir -p ${PROJ}/sgc/tools/erlangsourcestatistics/include/
 	\cp -fv src/*.erl \
+	${PROJ}/sgc/tools/erlangsourcestatistics/src/
+	\cp -fv include/*.hrl \
 	${PROJ}/sgc/tools/erlangsourcestatistics/src/
 	make ess -C ${PROJ}/sgc/src/sgc/reg
 	\cp -fv ${PROJ}/sgc/src/sgc/reg/res.* ~/dev_patches
@@ -17,5 +21,5 @@ sgc:
 	\cp -fv src/*.erl \
 	${PROJ}/sgc/tools/erlangsourcestatistics/src/
 	make ess -C ${PROJ}/sgc/src
-	\cp -fv ${PROJ}/sgc/src/reg/res.* ~/dev_patches
+	\cp -fv ${PROJ}/sgc/src/res.* ~/dev_patches
 

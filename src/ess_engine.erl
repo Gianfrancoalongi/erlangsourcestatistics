@@ -7,10 +7,13 @@
          generate_raw_values_csv/2
         ]).
 
+-import(ess_lib, [gv/2, gv/3]).
+
+
 generate_raw_values_csv(Tree, Opts) ->
     File = filename:join(gv(out_dir, Opts),"res.csv"),
     file:write_file(File, <<>>),
-    RV = lists:flatten(collect_raw_values(undefined, Tree)),
+    RV = lists:flatten(collect_raw_values(first_call, Tree)),
     Headings = get_headings(RV),
     write_headings(File, Headings),
     write_csv(File, Headings, RV),
@@ -35,18 +38,16 @@ write_one_row(File, Headings, {Mod, Name, RV}) ->
     S = string:join(V, ",")++"\n",
     file:write_file(File, S, [append]).
 
+collect_raw_values(first_call, #tree{name=N, raw_values=RV, children=CS}) ->
+    E = {"top", N, RV},
+    [ E | [collect_raw_values(undefined, C) || C <- CS ]];
 collect_raw_values(Module, #tree{type=function, name=N, raw_values=RV}) ->
     {Module, N, RV};
 collect_raw_values(_, #tree{type=file, name=Module, children=CS, raw_values=RV}) ->
     E = {Module, "", RV},
-    io:format("E: ~p~n", [E]),
     [ E | [collect_raw_values(Module, C) || C <- CS ]];
 collect_raw_values(M, #tree{type=dir, children=CS}) ->
     [ collect_raw_values(M, C) || C <- CS ].
-
-%% dump(Name, RawValues) ->
-%%     FMT = io_lib:format(" ~p : ~w~n", [Name, RawValues]),
-%%     file:write_file("/tmp/dump.tree", FMT, [append]).
 
 quality(T = #tree{type=function}, Opts) ->
     RV = T#tree.raw_values,
@@ -106,10 +107,10 @@ dir(Dir, Opts) ->
     add_parse_transform_dir(Opts),
     IncDirOpt = make_inc_compiler_opt(IncDirs),
 
-    reset_log(),
-    log("options:~p~n"
-        "incdirs:~p~n",[Opts, IncDirOpt]),
-
+    ess_lib:reset_log(run),
+    ess_lib:log(run, "options:~p~n"
+                "incdirs:~p~n", [Opts, IncDirOpt]),
+    
     ForEachFileFun = fun(File) -> file(File, Opts, IncDirOpt) end,
     find_files(Dir, ForEachFileFun, Opts).
 
@@ -189,11 +190,6 @@ find_files2(Dir, BlackList, ForEachFileFun) ->
     WhiteFs = remove_blacklisted(BlackList, Fs),
     SrcFiles = files_ending_in_erl(WhiteFs),
     SubDirs = find_in_subdirs_par(WhiteFs, BlackList, ForEachFileFun),
-    if (SrcFiles/=[]) andalso (SubDirs/=[]) ->
-            io:format("Warning, dir contains both source files and dirs: ~p~n",
-                      [Dir]);
-       true -> ok
-    end,
     Stats = for_each_file_par(SrcFiles, ForEachFileFun) ++ SubDirs,
     #tree{type = dir,
           name = Dir,
@@ -235,11 +231,7 @@ file(F, Opts, IncPaths) ->
         {ok,Mod,Bin,Warnings} = compile:file(F,CompileOpts ++ IncPaths),
         {ok,{Mod,[{abstract_code,{raw_abstract_v1,AST}}]}} =
             beam_lib:chunks(Bin,[abstract_code]),
-
         
-        %% dbg:tracer(),
-        %% dbg:p(all,[c]),
-        %% dbg:tpl(ess_duplication, x),
         try ess_duplication:detect(Mod, AST)
         catch _:Error -> 
                 io:format(user, "ERROR:~p~n", [erlang:get_stacktrace()])
@@ -247,7 +239,7 @@ file(F, Opts, IncPaths) ->
         
         RawValues = file_raw_values(AST, Warnings, F, Opts),        
         RawChildren = analyse_functions(AST, Opts),
-        io:format("  f: ~s: ok~n", [F]),
+        ess_lib:log(run, "  f: ~s: ok~n", [F]),
         #tree{type = file,
               name = F,
               raw_values = RawValues,
@@ -255,8 +247,8 @@ file(F, Opts, IncPaths) ->
              }
     catch
         _:Err ->
-            io:format("  f: ~s: error: ~p~n", [F, error_digest(Err)]),
-            log("f: ~p ~p ~p~n",[F, Err, erlang:get_stacktrace()]),
+            ess_lib:log(run, "  f: ~s: error: ~p~n", [F, error_digest(Err)]),
+            ess_lib:log(run, "f: ~p ~p~n", [F, erlang:get_stacktrace()]),
             undefined
     end.
 
@@ -265,13 +257,6 @@ error_digest({badmatch, {error, [{_, [{_,epp, {include, file, IncFile}}|_]}|_],_
     "missing_include: "++IncFile;
 error_digest(_) ->
     "error".
-
-reset_log() ->
-    file:delete("/tmp/ess_errors.log").
-
-log(Fmt, Args) ->
-    Message = io_lib:format(Fmt, Args),
-    file:write_file("/tmp/ess_errors.log", Message, [append]).
 
 get_all_values(K, Proplist) ->
     [ V || {Key,V} <- Proplist, Key == K ].
@@ -738,12 +723,6 @@ rev(L) -> lists:reverse(L).
 
 replace_tag(Tag, Value, L) ->
     lists:keystore(Tag, 1, L, {Tag, Value}).
-
-gv(Key, L) ->
-    proplists:get_value(Key, L).
-gv(Key, L, Def) ->
-    proplists:get_value(Key, L, Def).
-
 
 seq_accum(Acc, A, [F|L]) ->
     Acc2 = F(A) ++ Acc,
